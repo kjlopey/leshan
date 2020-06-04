@@ -1,9 +1,36 @@
-<div class="well well-sm" ng-if="serverSecurityInfo && serverSecurityInfo.rpk">
-	<h4>The Leshan public key</h4>
+<div class="well well-sm col-md-12" ng-if="certificate">
+	<h4>The Leshan Certificate  <small>(x509v3 der encoded)</small>
+		<button type="button" title ="Download server certificate(.der)" class="btn btn-default btn-xs" ng-click="saveFile('serverCertificate.der', certificate.bytesDer)">
+		<span class="glyphicon glyphicon-download-alt" aria-hidden="true">
+		</button>
+	</h4>
 	<p>
-		<u>Elliptic Curve parameters :</u> <code>{{serverSecurityInfo.rpk.params}}</code> <br/>
-		<u>Public x coord :</u> <code>{{serverSecurityInfo.rpk.x}}</code><br/>
-		<u>Public y coord :</u> <code>{{serverSecurityInfo.rpk.y}}</code>
+		<div class="col-md-7">
+			<u>Hex : </u> <pre>{{certificate.hexDer}}</pre>
+		</div>
+		<div class="col-md-5">
+			<u>Base64 : </u><pre>{{certificate.b64Der}}</pre>
+		</div>
+		<small>Clients generally need it for X509 authentication.</small><br/>
+	</p>
+</div>
+<div class="well well-sm col-md-12" ng-if="pubkey">
+	<h4>The Leshan Public Key <small>(SubjectPublicKeyInfo der encoded)</small>
+		<button type="button" title ="Download server public key(.der)" class="btn btn-default btn-xs" ng-click="saveFile('serverPubKey.der',pubkey.bytesDer)">
+			<span class="glyphicon glyphicon-download-alt" aria-hidden="true">
+		</button>
+	</h4>
+	<p>
+		<u>Elliptic Curve parameters :</u> <code>{{pubkey.params}}</code><br/>
+		<u>Public x coord :</u> <code>{{pubkey.x}}</code><br/>
+		<u>Public y coord :</u> <code>{{pubkey.y}}</code>
+		<div class="col-md-7">
+			<u>Hex : </u> <pre>{{pubkey.hexDer}}</pre>
+		</div>
+		<div class="col-md-5">
+			<u>Base64 : </u><pre>{{pubkey.b64Der}}</pre>
+		</div>	
+		<small>Clients generally need it for RPK authentication.</small>
 	</p>
 </div>
 
@@ -28,15 +55,14 @@
 			<td>{{ endpoint }}</td>
 			<td ng-if="security.psk">Pre-Shared Key</td>
 			<td ng-if="security.psk">
-				Identity : <code>{{ security.psk.identity }}</code><br/>
-				Key : <code>{{ security.psk.key }}</code>
+				Identity : <code style=display:block;white-space:pre-wrap>{{ wrap(security.psk.identity) }}</code>
+				Key : <code style=display:block;white-space:pre-wrap>{{ wrap(security.psk.key) }}</code>
 			</td>
 			<td ng-if="security.rpk">Raw Public Key <br/><small class="text-muted" >(Elliptic Curve)</small></td>
-			<td ng-if="security.rpk">
-				Params : <code>{{ security.rpk.params }}</code><br/> 
-				X : <code>{{ security.rpk.x }}</code><br/>
-				Y : <code>{{ security.rpk.y }}</code>
+			<td ng-if="security.rpk">Public Key : <br/> <code style=display:block;white-space:pre-wrap>{{wrap(security.rpk.key)}}</code><br/> 
 			</td>
+			<td ng-if="security.x509">X.509</td>
+			<td ng-if="security.x509">Uses X.509 certificate</td>
 			<td><button type="button" class="btn btn-default btn-xs" ng-click="remove(endpoint)">
 					<span class="glyphicon glyphicon-remove"></button></td>
 		</tr>
@@ -70,7 +96,8 @@
 						<div class="col-sm-8">
 							<select class="form-control" id="securityMode" ng-model="securityMode">
 								<option value="psk">Pre-Shared Key</option>
-								<option value="rpk">Raw Public Key (Elliptic Curves)</option>
+								<option value="rpk">Raw Public Key</option>
+								<option value="x509">X.509 Certificate</option>
 							</select>
 						</div>
 					</div>
@@ -100,36 +127,17 @@
 
 					<!-- RPK inputs -->
 					<div class="form-group"  style="resize:none" ng-class="{'hidden': securityMode!='rpk'}" show-errors>
-						<label for="rpkXValue" class="col-sm-4 control-label">X public key part</label>
+						<label for="rpkValue" class="col-sm-4 control-label">Client Public Key</label>
 						<div class="col-sm-8">
-							<textarea class="form-control" rows="3" id="rpkXValue" name="rpkXValue" ng-model="rpkXValue"
-							ng-required="securityMode=='rpk'" ng-pattern="/^[0-9a-fA-F]+$/" ng-maxlength="64"></textarea>
-							<p class="help-block" ng-if="form.rpkXValue.$error.required">X public key  part is required</p>
-							<p class="help-block" ng-if="form.rpkXValue.$error.pattern">Hexadecimal format is expected</p>
-							<p class="help-block" ng-if="form.rpkXValue.$error.maxlength">X public key part is too long</p>
-						</div>
-					</div>
-					
-					<div class="form-group"  style="resize:none" ng-class="{'hidden': securityMode!='rpk'}" show-errors>
-						<label for="rpkYValue" class="col-sm-4 control-label">Y public key part</label>
-						<div class="col-sm-8">
-							<textarea class="form-control" rows="3" id="rpkYValue" name="rpkYValue" ng-model="rpkYValue"
-							ng-required="securityMode=='rpk'" ng-pattern="/^[0-9a-fA-F]+$/" ng-maxlength="64"></textarea>
-							<p class="help-block" ng-if="form.rpkYValue.$error.required">Y public key part is required</p>
-							<p class="help-block" ng-if="form.rpkYValue.$error.pattern">Hexadecimal format is expected</p>
-							<p class="help-block" ng-if="form.rpkYValue.$error.maxlength">Y public key part is too long</p>
-						</div>
-					</div>
-					
-					<div class="form-group"  style="resize:none" ng-class="{'hidden': securityMode!='rpk'}">
-						<label for="rpkParamsValue" class="col-sm-4 control-label">EC parameters :</label>
-						<div class="col-sm-8">
-							<input class="form-control" id="rpkParamsValue" name="rpkParamsValue" ng-model="rpkParamsValue" type="text" placeholder="{{defaultParams}}">
+							<textarea class="form-control" rows="3" id="rpkValue" name="rpkValue" ng-model="rpkValue"
+							ng-required="securityMode=='rpk'" ng-pattern="/^[0-9a-fA-F]+$/"></textarea>
+							<p class="text-right text-muted small" style="margin:0">SubjectPublicKeyInfo der encoded in Hexadecimal</p>
+							<p class="help-block" ng-if="form.rpkValue.$error.required">X public key  part is required</p>
+							<p class="help-block" ng-if="form.rpkValue.$error.pattern">Hexadecimal format is expected</p>
 						</div>
 					</div>
 
-					<!-- Certificates input -->
-					<!-- TODO -->
+					<!-- Certificates input (nothing) -->
 
 				</form>
 			</div>

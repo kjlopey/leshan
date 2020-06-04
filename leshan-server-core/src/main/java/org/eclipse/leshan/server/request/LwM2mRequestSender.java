@@ -2,11 +2,11 @@
  * Copyright (c) 2013-2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -16,64 +16,86 @@
  *******************************************************************************/
 package org.eclipse.leshan.server.request;
 
+import org.eclipse.leshan.core.node.codec.CodecException;
 import org.eclipse.leshan.core.request.DownlinkRequest;
+import org.eclipse.leshan.core.request.exception.ClientSleepingException;
+import org.eclipse.leshan.core.request.exception.InvalidResponseException;
 import org.eclipse.leshan.core.request.exception.RequestCanceledException;
+import org.eclipse.leshan.core.request.exception.RequestRejectedException;
+import org.eclipse.leshan.core.request.exception.SendFailedException;
+import org.eclipse.leshan.core.request.exception.TimeoutException;
+import org.eclipse.leshan.core.request.exception.UnconnectedPeerException;
 import org.eclipse.leshan.core.response.ErrorCallback;
 import org.eclipse.leshan.core.response.LwM2mResponse;
 import org.eclipse.leshan.core.response.ResponseCallback;
-import org.eclipse.leshan.server.client.Client;
-import org.eclipse.leshan.server.response.ResponseListener;
+import org.eclipse.leshan.server.registration.Registration;
 
+/**
+ * A {@link LwM2mRequestSender} is responsible to send LWM2M {@link DownlinkRequest} for a given {@link Registration}.
+ */
 public interface LwM2mRequestSender {
 
     /**
-     * @Deprecated Synchronous send of a message will not be supported in the future. It is replaced by
-     *             {@link #send(Client, String, DownlinkRequest)}
+     * Send a Lightweight M2M request synchronously. Will block until a response is received from the remote server.
+     * <p>
+     * The synchronous way could block a thread during a long time so it is more recommended to use the asynchronous
+     * way.
+     * 
+     * @param destination The {@link Registration} associate to the device we want to sent the request.
+     * @param request The request to send to the client.
+     * @param timeoutInMs The global timeout to wait in milliseconds (see
+     *        https://github.com/eclipse/leshan/wiki/Request-Timeout)
+     * @param <T> The expected type of the response received.
+     * @return the LWM2M response. The response can be <code>null</code> if the timeout expires (see
+     *         https://github.com/eclipse/leshan/wiki/Request-Timeout).
+     * 
+     * @throws CodecException if request payload can not be encoded.
+     * @throws InterruptedException if the thread was interrupted.
+     * @throws RequestRejectedException if the request is rejected by foreign peer.
+     * @throws RequestCanceledException if the request is cancelled.
+     * @throws SendFailedException if the request can not be sent. E.g. error at CoAP or DTLS/UDP layer.
+     * @throws InvalidResponseException if the response received is malformed.
+     * @throws UnconnectedPeerException if client is not connected (no dtls connection available).
+     * @throws ClientSleepingException if client is currently sleeping.
      */
-    @Deprecated
-    <T extends LwM2mResponse> T send(Client destination, DownlinkRequest<T> request, Long timeout)
+    <T extends LwM2mResponse> T send(Registration destination, DownlinkRequest<T> request, long timeoutInMs)
             throws InterruptedException;
 
     /**
-     * @Deprecated Asynchronous send of a message with a callback will not be supported in the future. It is replaced by
-     *             {@link #send(Client, String, DownlinkRequest)}
+     * Send a Lightweight M2M {@link DownlinkRequest} asynchronously to a LWM2M client.
+     * 
+     * {@link ResponseCallback} and {@link ErrorCallback} are exclusively called.
+     * 
+     * @param destination The {@link Registration} associate to the device we want to sent the request.
+     * @param request The request to send to the client.
+     * @param timeoutInMs The global timeout to wait in milliseconds (see
+     *        https://github.com/eclipse/leshan/wiki/Request-Timeout)
+     * @param responseCallback a callback called when a response is received (successful or error response). This
+     *        callback MUST NOT be null.
+     * @param <T> The expected type of the response received.
+     * @param errorCallback a callback called when an error or exception occurred when response is received. It can be :
+     *        <ul>
+     *        <li>{@link RequestRejectedException} if the request is rejected by foreign peer.</li>
+     *        <li>{@link RequestCanceledException} if the request is cancelled.</li>
+     *        <li>{@link SendFailedException} if the request can not be sent. E.g. error at CoAP or DTLS/UDP layer.</li>
+     *        <li>{@link InvalidResponseException} if the response received is malformed.</li>
+     *        <li>{@link UnconnectedPeerException} if client is not connected (no dtls connection available).</li>
+     *        <li>{@link ClientSleepingException} if client is currently sleeping.</li>
+     *        <li>{@link TimeoutException} if the timeout expires (see
+     *        https://github.com/eclipse/leshan/wiki/Request-Timeout).</li>
+     *        <li>or any other RuntimeException for unexpected issue.
+     *        </ul>
+     *        This callback MUST NOT be null.
+     * @throws CodecException if request payload can not be encoded.
      */
-    @Deprecated
-    <T extends LwM2mResponse> void send(Client destination, DownlinkRequest<T> request,
+    <T extends LwM2mResponse> void send(Registration destination, DownlinkRequest<T> request, long timeoutInMs,
             ResponseCallback<T> responseCallback, ErrorCallback errorCallback);
 
     /**
-     * sends a Lightweight M2M request asynchronously and uses the requestTicket to correlate the response from a LWM2M
-     * Client.
-     *
-     * @param destination registration meta data of a LWM2M client.
-     * @param requestTicket a globally unique identifier for correlating the response
-     * @param request an instance of downlink request.
-     * @param <T> instance of LwM2mResponse
-     */
-    <T extends LwM2mResponse> void send(Client destination, String requestTicket, DownlinkRequest<T> request);
-
-    /**
-     * adds the listener for the given LWM2M client. This method shall be used to re-register a listener for already
-     * sent messages or pending messages.
-     *
-     * @param listener global listener for handling the responses from a LWM2M client.
-     */
-    void addResponseListener(ResponseListener listener);
-
-    /**
-     * removes the given instance of response listener from LWM2M Sender's list of response listeners.
+     * cancel all ongoing messages for a LWM2M client identified by the registration identifier. In case a client
+     * de-registers, the consumer can use this method to cancel all ongoing messages for the given client.
      * 
-     * @param listener target listener to be removed.
+     * @param registration client registration meta data of a LWM2M client.
      */
-    void removeResponseListener(ResponseListener listener);
-
-    /**
-     * cancel all pending messages for a LWM2M client identified by the registration identifier. In case a client
-     * de-registers, the consumer can use this method to cancel all messages pending for the given client.
-     * 
-     * @param client client registration meta data of a LWM2M client.
-     * @throws RequestCanceledException when a request is already being sent in CoAP, then the exception is thrown.
-     */
-    void cancelPendingRequests(Client client);
+    void cancelOngoingRequests(Registration registration);
 }

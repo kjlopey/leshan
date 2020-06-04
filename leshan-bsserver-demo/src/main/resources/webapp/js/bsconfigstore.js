@@ -1,6 +1,6 @@
-// convert config from server format to UI format :
+// convert config from rest API format to UI format :
 // we regroup security and server data
-var convertConfig = function(config){
+var configFromRestToUI = function(config){
     var newConfig = {dm:[],bs:[]};
     for (var i in config.security){
         var security = config.security[i];
@@ -23,16 +23,16 @@ var convertConfig = function(config){
     }
     return newConfig;
 };
-var convertConfigs = function(configs){
+var configsFromRestToUI = function(configs){
     var newConfigs = {};
     for (var endpoint in configs){
-        newConfigs[endpoint] = convertConfig(configs[endpoint]);
+        newConfigs[endpoint] = configFromRestToUI(configs[endpoint]);
     }
     return newConfigs;
 };
 
-//convert config from UI to UI server:
-var toConfig = function(config){
+//convert config from UI to rest API format:
+var configFromUIToRest = function(config){
     var newConfig = {servers:{}, security:{}};
     for (var i = 0; i < config.bs.length; i++) {
         var bs = config.bs[i];
@@ -44,6 +44,7 @@ var toConfig = function(config){
         delete dm.security;
         newConfig.servers[j] = dm;
     }
+    newConfig.toDelete = ["/0", "/1"]
     return newConfig;
 };
 
@@ -57,31 +58,29 @@ function BsConfigStore() {
 
     self.init = function (){
         $.get('api/bootstrap', function(data) {
-            self.bsconfigs = convertConfigs(data);
+            self.bsconfigs = configsFromRestToUI(data);
             self.trigger('changed', self.bsconfigs);
-        }).fail(function(data, status, headers, config){
-            var err = "Unable to get the bootstrap info list.";
-            console.error(err, status, data);
-            alert(err + " see console log for mor details");
+        }).fail(function(xhr, status, error){
+            var err = "Unable to get the bootstrap info list";
+            console.error(err, status, error, xhr.responseText);
+            alert(err + ": " + xhr.responseText);
         });
     };
 
     self.add = function(endpoint,config) {
-        var data = toConfig(config);
-        console.log(data);
+        var data = configFromUIToRest(config);
         $.ajax({
             type: "POST",
             url: 'api/bootstrap/'+endpoint,
             data: JSON.stringify(data),
             contentType:"application/json; charset=utf-8",
         }).done(function () {
-            self.bsconfigs[endpoint] = convertConfig(data);
+            self.bsconfigs[endpoint] = configFromRestToUI(data);
             self.trigger('changed', self.bsconfigs);
-        })
-        .fail(function (response, status) {
-          var err = "Unable to post the bootstrap config.";
-          console.error(err,endpoint, status, response);
-          alert(err + "see console log for mor details");
+        }).fail(function (xhr, status, error) {
+          var err = "Unable to post the bootstrap config";
+          console.error(err, endpoint, status, error, xhr.responseText);
+          alert(err + ": " + xhr.responseText);
         });
     };
 
@@ -92,11 +91,10 @@ function BsConfigStore() {
         }).done(function () {
             delete self.bsconfigs[endpoint];
             self.trigger('changed', self.bsconfigs);
-        })
-        .fail(function (response, status) {
-          var err = "Unable to delete the bootstrap config.";
-          console.error(err,endpoint, status, response);
-          alert(err + "see console log for mor details");
+        }).fail(function (xhr, status, error) {
+          var err = "Unable to delete the bootstrap config";
+          console.error(err,endpoint, status, xhr.responseText);
+          alert(err + ": " +xhr.responseText);
         });
     };
 }

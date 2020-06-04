@@ -2,11 +2,11 @@
  * Copyright (c) 2013-2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -16,6 +16,7 @@
 package org.eclipse.leshan.server.demo.servlet;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,26 +24,28 @@ import java.util.concurrent.ConcurrentHashMap;
 import javax.servlet.http.HttpServletRequest;
 
 import org.eclipse.californium.core.network.Endpoint;
+import org.eclipse.jetty.servlets.EventSource;
+import org.eclipse.jetty.servlets.EventSourceServlet;
 import org.eclipse.leshan.core.node.LwM2mNode;
 import org.eclipse.leshan.core.observation.Observation;
 import org.eclipse.leshan.core.response.ObserveResponse;
-import org.eclipse.leshan.server.californium.impl.LeshanServer;
-import org.eclipse.leshan.server.client.Client;
-import org.eclipse.leshan.server.client.ClientRegistryListener;
-import org.eclipse.leshan.server.client.ClientUpdate;
-import org.eclipse.leshan.server.demo.servlet.json.ClientSerializer;
+import org.eclipse.leshan.server.californium.LeshanServer;
 import org.eclipse.leshan.server.demo.servlet.json.LwM2mNodeSerializer;
+import org.eclipse.leshan.server.demo.servlet.json.RegistrationSerializer;
 import org.eclipse.leshan.server.demo.servlet.log.CoapMessage;
 import org.eclipse.leshan.server.demo.servlet.log.CoapMessageListener;
 import org.eclipse.leshan.server.demo.servlet.log.CoapMessageTracer;
-import org.eclipse.leshan.server.demo.utils.EventSource;
-import org.eclipse.leshan.server.demo.utils.EventSourceServlet;
-import org.eclipse.leshan.server.observation.ObservationRegistryListener;
+import org.eclipse.leshan.server.observation.ObservationListener;
+import org.eclipse.leshan.server.queue.PresenceListener;
+import org.eclipse.leshan.server.registration.Registration;
+import org.eclipse.leshan.server.registration.RegistrationListener;
+import org.eclipse.leshan.server.registration.RegistrationUpdate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
 
 public class EventServlet extends EventSourceServlet {
 
@@ -51,6 +54,10 @@ public class EventServlet extends EventSourceServlet {
     private static final String EVENT_UPDATED = "UPDATED";
 
     private static final String EVENT_REGISTRATION = "REGISTRATION";
+
+    private static final String EVENT_AWAKE = "AWAKE";
+
+    private static final String EVENT_SLEEPING = "SLEEPING";
 
     private static final String EVENT_NOTIFICATION = "NOTIFICATION";
 
@@ -66,74 +73,102 @@ public class EventServlet extends EventSourceServlet {
 
     private final CoapMessageTracer coapMessageTracer;
 
-    private final LeshanServer server;
-
     private Set<LeshanEventSource> eventSources = Collections
             .newSetFromMap(new ConcurrentHashMap<LeshanEventSource, Boolean>());
 
-    private final ClientRegistryListener clientRegistryListener = new ClientRegistryListener() {
+    private final RegistrationListener registrationListener = new RegistrationListener() {
 
         @Override
-        public void registered(Client client) {
-            String jClient = EventServlet.this.gson.toJson(client);
-            sendEvent(EVENT_REGISTRATION, jClient, client.getEndpoint());
+        public void registered(Registration registration, Registration previousReg,
+                Collection<Observation> previousObsersations) {
+            String jReg = EventServlet.this.gson.toJson(registration);
+            sendEvent(EVENT_REGISTRATION, jReg, registration.getEndpoint());
         }
 
         @Override
-        public void updated(ClientUpdate update, Client clientUpdated) {
-            String jClient = EventServlet.this.gson.toJson(clientUpdated);
-            sendEvent(EVENT_UPDATED, jClient, clientUpdated.getEndpoint());
-        };
+        public void updated(RegistrationUpdate update, Registration updatedRegistration,
+                Registration previousRegistration) {
+            RegUpdate regUpdate = new RegUpdate();
+            regUpdate.registration = updatedRegistration;
+            regUpdate.update = update;
+            String jReg = EventServlet.this.gson.toJson(regUpdate);
+            sendEvent(EVENT_UPDATED, jReg, updatedRegistration.getEndpoint());
+        }
 
         @Override
-        public void unregistered(Client client) {
-            String jClient = EventServlet.this.gson.toJson(client);
-            sendEvent(EVENT_DEREGISTRATION, jClient, client.getEndpoint());
+        public void unregistered(Registration registration, Collection<Observation> observations, boolean expired,
+                Registration newReg) {
+            String jReg = EventServlet.this.gson.toJson(registration);
+            sendEvent(EVENT_DEREGISTRATION, jReg, registration.getEndpoint());
+        }
+
+    };
+
+    public final PresenceListener presenceListener = new PresenceListener() {
+
+        @Override
+        public void onSleeping(Registration registration) {
+            String data = new StringBuilder("{\"ep\":\"").append(registration.getEndpoint()).append("\"}").toString();
+
+            sendEvent(EVENT_SLEEPING, data, registration.getEndpoint());
+        }
+
+        @Override
+        public void onAwake(Registration registration) {
+            String data = new StringBuilder("{\"ep\":\"").append(registration.getEndpoint()).append("\"}").toString();
+            sendEvent(EVENT_AWAKE, data, registration.getEndpoint());
         }
     };
 
-    private final ObservationRegistryListener observationRegistryListener = new ObservationRegistryListener() {
+    private final ObservationListener observationListener = new ObservationListener() {
 
         @Override
         public void cancelled(Observation observation) {
         }
 
         @Override
-        public void newValue(Observation observation, ObserveResponse response) {
+        public void onResponse(Observation observation, Registration registration, ObserveResponse response) {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Received notification from [{}] containing value [{}]", observation.getPath(),
                         response.getContent().toString());
             }
-            Client client = server.getClientRegistry().findByRegistrationId(observation.getRegistrationId());
 
-            if (client != null) {
-                String data = new StringBuffer("{\"ep\":\"").append(client.getEndpoint()).append("\",\"res\":\"")
+            if (registration != null) {
+                String data = new StringBuilder("{\"ep\":\"").append(registration.getEndpoint()).append("\",\"res\":\"")
                         .append(observation.getPath().toString()).append("\",\"val\":")
-                        .append(gson.toJson(response.getContent()))
-                        .append("}").toString();
+                        .append(gson.toJson(response.getContent())).append("}").toString();
 
-                sendEvent(EVENT_NOTIFICATION, data, client.getEndpoint());
+                sendEvent(EVENT_NOTIFICATION, data, registration.getEndpoint());
             }
         }
 
         @Override
-        public void newObservation(Observation observation) {
+        public void onError(Observation observation, Registration registration, Exception error) {
+            if (LOG.isWarnEnabled()) {
+                LOG.warn(String.format("Unable to handle notification of [%s:%s]", observation.getRegistrationId(),
+                        observation.getPath()), error);
+            }
+        }
+
+        @Override
+        public void newObservation(Observation observation, Registration registration) {
         }
     };
 
     public EventServlet(LeshanServer server, int securePort) {
-        this.server = server;
-        server.getClientRegistry().addListener(this.clientRegistryListener);
-        server.getObservationRegistry().addListener(this.observationRegistryListener);
+        server.getRegistrationService().addListener(this.registrationListener);
+        server.getObservationService().addListener(this.observationListener);
+        server.getPresenceService().addListener(this.presenceListener);
 
         // add an interceptor to each endpoint to trace all CoAP messages
-        coapMessageTracer = new CoapMessageTracer(server.getClientRegistry());
-        for (Endpoint endpoint : server.getCoapServer().getEndpoints()) {
+        coapMessageTracer = new CoapMessageTracer(server.getRegistrationService());
+        for (Endpoint endpoint : server.coap().getServer().getEndpoints()) {
             endpoint.addInterceptor(coapMessageTracer);
         }
 
         GsonBuilder gsonBuilder = new GsonBuilder();
-        gsonBuilder.registerTypeHierarchyAdapter(Client.class, new ClientSerializer(securePort));
+        gsonBuilder.registerTypeHierarchyAdapter(Registration.class,
+                new RegistrationSerializer(server.getPresenceService()));
         gsonBuilder.registerTypeHierarchyAdapter(LwM2mNode.class, new LwM2mNodeSerializer());
         gsonBuilder.setDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX");
         this.gson = gsonBuilder.create();
@@ -161,8 +196,10 @@ public class EventServlet extends EventSourceServlet {
 
         @Override
         public void trace(CoapMessage message) {
-            String coapLog = EventServlet.this.gson.toJson(message);
-            sendEvent(EVENT_COAP_LOG, coapLog, endpoint);
+            JsonElement coapLog = EventServlet.this.gson.toJsonTree(message);
+            coapLog.getAsJsonObject().addProperty("ep", this.endpoint);
+            String coapLogWithEndPoint = EventServlet.this.gson.toJson(coapLog);
+            sendEvent(EVENT_COAP_LOG, coapLogWithEndPoint, endpoint);
         }
 
     }
@@ -211,6 +248,7 @@ public class EventServlet extends EventSourceServlet {
             try {
                 emitter.event(event, data);
             } catch (IOException e) {
+                e.printStackTrace();
                 onClose();
             }
         }
@@ -218,5 +256,11 @@ public class EventServlet extends EventSourceServlet {
         public String getEndpoint() {
             return endpoint;
         }
+    }
+
+    @SuppressWarnings("unused")
+    private class RegUpdate {
+        public Registration registration;
+        public RegistrationUpdate update;
     }
 }

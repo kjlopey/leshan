@@ -2,11 +2,11 @@
  * Copyright (c) 2016 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -33,8 +33,10 @@ public interface LwM2mNodeEncoder {
      * @param path the path of the node to serialize
      * @param model the collection of supported object models
      * @return the encoded node as a byte array
+     * @throws CodecException if there payload is malformed.
      */
-    byte[] encode(LwM2mNode node, ContentFormat format, LwM2mPath path, LwM2mModel model);
+    byte[] encode(LwM2mNode node, ContentFormat format, LwM2mPath path, LwM2mModel model)
+            throws CodecException;
 
     /**
      * Serializes a list of time-stamped {@link LwM2mNode} with the given content format.
@@ -44,9 +46,10 @@ public interface LwM2mNodeEncoder {
      * @param path the path of the node to serialize
      * @param model the collection of supported object models
      * @return the encoded node as a byte array
+     * @throws CodecException if there payload is malformed.
      */
     byte[] encodeTimestampedData(List<TimestampedLwM2mNode> timestampedNodes, ContentFormat format, LwM2mPath path,
-            LwM2mModel model);
+            LwM2mModel model) throws CodecException;
 
     /**
      * return true is the given {@link ContentFormat} is supported

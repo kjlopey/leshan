@@ -2,11 +2,11 @@
  * Copyright (c) 2013-2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -21,7 +21,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.eclipse.leshan.util.Validate;
+import org.eclipse.leshan.core.node.codec.tlv.LwM2mNodeTlvDecoder;
+import org.eclipse.leshan.core.util.Validate;
 
 /**
  * An instance of {@link LwM2mObject}.
@@ -35,8 +36,31 @@ public class LwM2mObjectInstance implements LwM2mNode {
 
     private final Map<Integer, LwM2mResource> resources;
 
+    /**
+     * This constructor is only for internal purpose.
+     * <p>
+     * It SHOULD NOT be used. It only exist to support the "special" use case where instance id is not defined on create
+     * request. The rare case where it should make sense to use it, is implementing a decoder which support this special
+     * use case like {@link LwM2mNodeTlvDecoder}.
+     */
+    public LwM2mObjectInstance(Collection<LwM2mResource> resources) {
+        LwM2mNodeUtil.validateNotNull(resources, "resource MUST NOT be null");
+        this.id = UNDEFINED;
+        Map<Integer, LwM2mResource> resourcesMap = new HashMap<>(resources.size());
+        for (LwM2mResource resource : resources) {
+            LwM2mResource previous = resourcesMap.put(resource.getId(), resource);
+            if (previous != null) {
+                throw new LwM2mNodeException(
+                        "Unable to create LwM2mObjectInstance : there is several resources with the same id %d",
+                        resource.getId());
+            }
+        }
+        this.resources = Collections.unmodifiableMap(resourcesMap);
+    }
+
     public LwM2mObjectInstance(int id, Collection<LwM2mResource> resources) {
         Validate.notNull(resources);
+        LwM2mNodeUtil.validateObjectInstanceId(id);
 
         this.id = id;
         Map<Integer, LwM2mResource> resourcesMap = new HashMap<>(resources.size());

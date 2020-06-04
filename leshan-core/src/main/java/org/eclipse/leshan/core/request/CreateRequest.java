@@ -2,11 +2,11 @@
  * Copyright (c) 2013-2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -23,16 +23,16 @@ import java.util.List;
 import org.eclipse.leshan.core.node.LwM2mObjectInstance;
 import org.eclipse.leshan.core.node.LwM2mPath;
 import org.eclipse.leshan.core.node.LwM2mResource;
+import org.eclipse.leshan.core.request.exception.InvalidRequestException;
 import org.eclipse.leshan.core.response.CreateResponse;
-import org.eclipse.leshan.util.Validate;
 
 /**
  * A Lightweight M2M request for creating Object Instance(s) within the LWM2M Client.
  */
 public class CreateRequest extends AbstractDownlinkRequest<CreateResponse> {
 
-    private final Integer instanceId;
     private final List<LwM2mResource> resources;
+    private final List<LwM2mObjectInstance> instances;
     private final ContentFormat contentFormat;
 
     // ***************** constructors without object instance id ******************* /
@@ -44,9 +44,11 @@ public class CreateRequest extends AbstractDownlinkRequest<CreateResponse> {
      * @param contentFormat the payload format
      * @param objectId the object id
      * @param resources the resource values for the new instance
+     * @exception InvalidRequestException if bad @{link ContentFormat} format was used.
      */
-    public CreateRequest(ContentFormat contentFormat, int objectId, LwM2mResource... resources) {
-        this(contentFormat, new LwM2mPath(objectId), null, resources);
+    public CreateRequest(ContentFormat contentFormat, int objectId, LwM2mResource... resources)
+            throws InvalidRequestException {
+        this(contentFormat, new LwM2mPath(objectId), resources, null);
     }
 
     /**
@@ -57,7 +59,7 @@ public class CreateRequest extends AbstractDownlinkRequest<CreateResponse> {
      * @param resources the resource values for the new instance
      */
     public CreateRequest(int objectId, LwM2mResource... resources) {
-        this(null, new LwM2mPath(objectId), null, resources);
+        this(null, new LwM2mPath(objectId), resources, null);
     }
 
     /**
@@ -67,8 +69,10 @@ public class CreateRequest extends AbstractDownlinkRequest<CreateResponse> {
      * @param contentFormat the payload format
      * @param objectId the object id
      * @param resources the resource values for the new instance
+     * @exception InvalidRequestException if bad @{link ContentFormat} format was used.
      */
-    public CreateRequest(ContentFormat contentFormat, int objectId, Collection<LwM2mResource> resources) {
+    public CreateRequest(ContentFormat contentFormat, int objectId, Collection<LwM2mResource> resources)
+            throws InvalidRequestException {
         this(contentFormat, objectId, resources.toArray(new LwM2mResource[resources.size()]));
     }
 
@@ -86,133 +90,142 @@ public class CreateRequest extends AbstractDownlinkRequest<CreateResponse> {
     // ***************** constructor with object instance ******************* /
 
     /**
-     * Creates a request for creating an instance of a particular object.
+     * Creates a request for creating instances of a particular object.
      * 
      * @param contentFormat the payload format
      * @param objectId the object id
-     * @param instance the object instance
+     * @param instances the object instances to create
+     * @exception InvalidRequestException if bad @{link ContentFormat} format was used.
      */
-    public CreateRequest(ContentFormat contentFormat, int objectId, LwM2mObjectInstance instance) {
-        this(contentFormat, new LwM2mPath(objectId), instance.getId(),
-                instance.getResources().values().toArray(new LwM2mResource[0]));
+    public CreateRequest(ContentFormat contentFormat, int objectId, LwM2mObjectInstance... instances)
+            throws InvalidRequestException {
+        this(contentFormat, new LwM2mPath(objectId), null, instances);
     }
 
     /**
-     * Creates a request for creating an instance of a particular object using the TLV content format.
+     * Creates a request for creating instances of a particular object using the TLV content format.
      * 
      * @param objectId the object id
-     * @param instance the object instance
+     * @param instances the object instances to create
      */
-    public CreateRequest(int objectId, LwM2mObjectInstance instance) {
-        this(null, objectId, instance);
+    public CreateRequest(int objectId, LwM2mObjectInstance... instances) {
+        this(null, objectId, instances);
     }
 
     // ***************** string path constructor ******************* /
     /**
-     * Creates a request for creating an instance of a particular object using the default TLV content format. </br>
-     * If the path is an object path, the instance id will be chosen by the client and accessible in the CreateResponse.
-     * To choose instance id at server side, the path must be an object instance path.
+     * Creates a request for creating an instance of a particular object using the default TLV content format.
+     * <p>
+     * The path MUST BE an object path, the instance id will be chosen by the client and accessible in the
+     * CreateResponse.
      * 
-     * @param path the target path (object or object instance)
+     * @param path the target object path
      * @param resources the resource values for the new instance
+     * @exception InvalidRequestException if the target path is not valid.
      */
-    public CreateRequest(String path, Collection<LwM2mResource> resources) {
+    public CreateRequest(String path, Collection<LwM2mResource> resources) throws InvalidRequestException {
         this(path, resources.toArray(new LwM2mResource[resources.size()]));
     }
 
     /**
-     * Creates a request for creating an instance of a particular object. </br>
-     * If the path is an object path, the instance id will be chosen by the client and accessible in the CreateResponse.
-     * To choose instance id at server side, the path must be an object instance path.
+     * Creates a request for creating an instance of a particular object.
+     * <p>
+     * The path MUST BE an object path, the instance id will be chosen by the client and accessible in the
+     * CreateResponse.
      * 
      * @param contentFormat the payload format (TLV or JSON)
-     * @param path the target path (object or object instance)
+     * @param path the target object path
      * @param resources the resource values for the new instance
+     * @exception InvalidRequestException if parameters are invalid.
      */
-    public CreateRequest(ContentFormat contentFormat, String path, Collection<LwM2mResource> resources) {
+    public CreateRequest(ContentFormat contentFormat, String path, Collection<LwM2mResource> resources)
+            throws InvalidRequestException {
         this(contentFormat, path, resources.toArray(new LwM2mResource[resources.size()]));
     }
 
     /**
-     * Creates a request for creating an instance of a particular object using the default TLV content format. </br>
-     * If the path is an object path, the instance id will be chosen by the client and accessible in the CreateResponse.
-     * To choose instance id at server side, the path must be an object instance path.
+     * Creates a request for creating an instance of a particular object using the default TLV content format.
+     * <p>
+     * The path MUST BE an object path, the instance id will be chosen by the client and accessible in the
+     * CreateResponse.
      * 
-     * @param path the target path (object or object instance)
+     * @param path the target object path
      * @param resources the resource values for the new instance
+     * @exception InvalidRequestException if the target path is not valid.
      */
-    public CreateRequest(String path, LwM2mResource... resources) {
-        this(null, new LwM2mPath(path), null, resources);
+    public CreateRequest(String path, LwM2mResource... resources) throws InvalidRequestException {
+        this(null, newPath(path), resources, null);
     }
 
     /**
-     * Creates a request for creating an instance of a particular object.</br>
-     * If the path is an object path, the instance id will be chosen by the client and accessible in the CreateResponse.
-     * To choose instance id at server side, the path must be an object instance path.
+     * Creates a request for creating an instance of a particular object.
+     * <p>
+     * The path MUST BE an object path, the instance id will be chosen by the client and accessible in the
+     * CreateResponse.
      * 
      * @param contentFormat the payload format (TLV or JSON)
-     * @param path the target path (object or object instance)
+     * @param path the target object path
      * @param resources the resource values for the new instance
+     * @exception InvalidRequestException if parameters are invalid.
      */
-    public CreateRequest(ContentFormat contentFormat, String path, LwM2mResource... resources) {
-        this(contentFormat, new LwM2mPath(path), null, resources);
+    public CreateRequest(ContentFormat contentFormat, String path, LwM2mResource... resources)
+            throws InvalidRequestException {
+        this(contentFormat, newPath(path), resources, null);
     }
 
     /**
-     * Creates a request for creating an instance of a particular object.</br>
-     * If the path is an object path, the instance id will be chosen by the client and accessible in the CreateResponse.
-     * To choose instance id at server side, the path must be an object instance path.
+     * Creates a request for creating instances of a particular object.
      * 
-     * @param path the target path (object or object instance)
-     * @param instance the object instance
+     * @param path the target object path
+     * @param instances the object instances to create
+     * @exception InvalidRequestException if the target path is not valid.
      */
-    public CreateRequest(String path, LwM2mObjectInstance instance) {
-        this(null, new LwM2mPath(path), instance.getId(),
-                instance.getResources().values().toArray((new LwM2mResource[instance.getResources().size()])));
+    public CreateRequest(String path, LwM2mObjectInstance... instances) throws InvalidRequestException {
+        this(null, newPath(path), null, instances);
     }
 
     /**
-     * Creates a request for creating an instance of a particular object.</br>
-     * If the path is an object path, the instance id will be chosen by the client and accessible in the CreateResponse.
-     * To choose instance id at server side, the path must be an object instance path.
+     * Creates a request for creating instances of a particular object.
      * 
      * @param contentFormat the payload format (TLV or JSON)
-     * @param path the target path (object or object instance)
-     * @param instance the object instance
+     * @param path the target object path
+     * @param instances the object instances to create
+     * @exception InvalidRequestException if parameters are invalid.
      */
-    public CreateRequest(ContentFormat contentFormat, String path, LwM2mObjectInstance instance) {
-        this(contentFormat, new LwM2mPath(path), instance.getId(),
-                instance.getResources().values().toArray((new LwM2mResource[instance.getResources().size()])));
+    public CreateRequest(ContentFormat contentFormat, String path, LwM2mObjectInstance... instances)
+            throws InvalidRequestException {
+        this(contentFormat, newPath(path), null, instances);
     }
 
     // ***************** generic constructor ******************* /
-    private CreateRequest(ContentFormat format, LwM2mPath target, Integer instanceId, LwM2mResource[] resources) {
+    private CreateRequest(ContentFormat format, LwM2mPath target, LwM2mResource[] resources,
+            LwM2mObjectInstance[] instances) {
         super(target);
+        // ensure instances and resources attributes is exclusives
+        if ((instances == null && resources == null) || (instances != null && resources != null)) {
+            throw new InvalidRequestException("instance or resources must be present (but not both)");
+        }
+        // accept only object
+        if (target.isRoot())
+            throw new InvalidRequestException("Create request cannot target root path");
 
-        // accept only object and object instance path
-        if (!target.isObject() && !target.isObjectInstance()) {
-            throw new IllegalArgumentException("Create request must target an object or object instance");
-        }
-
-        // validate instance id
-        if (instanceId != null && instanceId == LwM2mObjectInstance.UNDEFINED) {
-            instanceId = null;
-        }
-        if (target.isObjectInstance()) {
-            if (instanceId == null) {
-                instanceId = target.getObjectInstanceId();
-            } else {
-                if (instanceId != target.getObjectInstanceId()) {
-                    throw new IllegalArgumentException("Conflict between path instance id and node instance id");
-                }
-            }
-        }
-        Validate.isTrue(instanceId == null || instanceId >= 0, "Invalid instance id: " + instanceId);
+        if (!target.isObject())
+            throw new InvalidRequestException("Invalid path %s: Create request must target an object", target);
 
         // store attributes
-        this.instanceId = instanceId;
-        this.resources = Collections.unmodifiableList(Arrays.asList(resources));
+        if (resources != null) {
+            this.resources = Collections.unmodifiableList(Arrays.asList(resources));
+            this.instances = null;
+        } else {
+            this.resources = null;
+            this.instances = Collections.unmodifiableList(Arrays.asList(instances));
+        }
         this.contentFormat = format != null ? format : ContentFormat.TLV; // default to TLV
+
+        if (this.contentFormat == ContentFormat.JSON && unknownObjectInstanceId()) {
+            throw new InvalidRequestException(
+                    "Missing object instance id for CREATE request (%s) using JSON content format.", target);
+        }
     }
 
     @Override
@@ -224,11 +237,12 @@ public class CreateRequest extends AbstractDownlinkRequest<CreateResponse> {
         return resources;
     }
 
-    /**
-     * @return the id of the new instance. <code>null</code> if not assigned by the server.
-     */
-    public Integer getInstanceId() {
-        return instanceId;
+    public List<LwM2mObjectInstance> getObjectInstances() {
+        return instances;
+    }
+
+    public boolean unknownObjectInstanceId() {
+        return instances == null;
     }
 
     public ContentFormat getContentFormat() {
@@ -247,7 +261,7 @@ public class CreateRequest extends AbstractDownlinkRequest<CreateResponse> {
         final int prime = 31;
         int result = super.hashCode();
         result = prime * result + ((contentFormat == null) ? 0 : contentFormat.hashCode());
-        result = prime * result + ((instanceId == null) ? 0 : instanceId.hashCode());
+        result = prime * result + ((instances == null) ? 0 : instances.hashCode());
         result = prime * result + ((resources == null) ? 0 : resources.hashCode());
         return result;
     }
@@ -261,12 +275,15 @@ public class CreateRequest extends AbstractDownlinkRequest<CreateResponse> {
         if (getClass() != obj.getClass())
             return false;
         CreateRequest other = (CreateRequest) obj;
-        if (contentFormat != other.contentFormat)
-            return false;
-        if (instanceId == null) {
-            if (other.instanceId != null)
+        if (contentFormat == null) {
+            if (other.contentFormat != null)
                 return false;
-        } else if (!instanceId.equals(other.instanceId))
+        } else if (!contentFormat.equals(other.contentFormat))
+            return false;
+        if (instances == null) {
+            if (other.instances != null)
+                return false;
+        } else if (!instances.equals(other.instances))
             return false;
         if (resources == null) {
             if (other.resources != null)

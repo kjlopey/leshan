@@ -2,11 +2,11 @@
  * Copyright (c) 2013-2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -16,7 +16,7 @@
 
 angular.module('objectDirectives', [])
 
-.directive('object', function ($compile, $routeParams, $http, dialog,$filter,$modal,lwResources) {
+.directive('object', function ($compile, $routeParams, $http, dialog, $filter, $modal, lwResources, helper) {
     return {
         restrict: "E",
         replace: true,
@@ -38,54 +38,62 @@ angular.module('objectDirectives', [])
                   templateUrl: 'partials/modal-instance.html',
                   controller: 'modalInstanceController',
                   resolve: {
-                    object: function(){ return scope.object},
-                    instanceId: function(){ return null},
+                    object: function(){ return scope.object;},
+                    instanceId: function(){ return null;},
                   }
                 });
             
-                modalInstance.result.then(function (instance) {
-                    // Build payload
-                    var payload = {};
-                    payload["id"] = instance.id;
-                    payload["resources"] = []
+                modalInstance.result.then(function (result) {
+                    var instance = result.instance;
+                    promisedValues = instance.resources.map(r => r.getPromisedValue())
+                    Promise.all(promisedValues).then(function(resourceValues) {
+                        // Build payload
+                        var payload = {};
+                        if (instance.id)
+                            payload["id"] = instance.id;
+                        payload["resources"] = [];
 
-                    for(i in instance.resources){
-                        var resource = instance.resources[i];
-                        if (resource.value != undefined){
-                            payload.resources.push({
-                                id:resource.id,
-                                value:lwResources.getTypedValue(resource.value, resource.def.type)
-                            })
-                        } 
-                    }
-                    // Send request
-                    var format = scope.settings.multi.format;
-                    var instancepath  = scope.object.path;
-                    $http({method: 'POST', url: "api/clients/" + $routeParams.clientId + instancepath, data: payload, headers:{'Content-Type': 'application/json'}, params:{format:format}})
-                    .success(function(data, status, headers, config) {
-                        create = scope.object.create;
-                        create.date = new Date();
-                        var formattedDate = $filter('date')(create.date, 'HH:mm:ss.sss');
-                        create.status = data.status;
-                        create.tooltip = formattedDate + "<br/>" + create.status;
-                        
-                        if (data.status == "CREATED") {
-                            var newinstance = lwResources.addInstance(scope.object, instance.id, null)
-                            for (var i in payload.resources) {
-                                var tlvresource = payload.resources[i];
-                                resource = lwResources.addResource(scope.object, newinstance, tlvresource.id, null)
-                                resource.value = tlvresource.value;
-                                resource.valuesupposed = true;
-                                resource.tooltip = formattedDate;
+                        for(i in instance.resources){
+                            var resource = instance.resources[i];
+                            var resourceValue = resourceValues[i];
+                            if (resourceValue != undefined){
+                                payload.resources.push({
+                                    id:resource.id,
+                                    value:lwResources.getTypedValue(resourceValue, resource.def.type)
+                                });
                             }
                         }
-                    }).error(function(data, status, headers, config) {
-                        errormessage = "Unable to create instance " + instancepath + " for "+ $routeParams.clientId + " : " + status +" "+ data
-                        dialog.open(errormessage);
-                        console.error(errormessage)
-                    });;
+                        // Send request
+                        var format = scope.settings.multi.format;
+                        var timeout = scope.settings.timeout.value;
+                        var instancepath  = scope.object.path;
+                        $http({method: 'POST', url: "api/clients/" + $routeParams.clientId + instancepath, data: payload, headers:{'Content-Type': 'application/json'}, params:{format:format,timeout:timeout}})
+                        .success(function(data, status, headers, config) {
+                            helper.handleResponse(data, scope.object.create, function (formattedDate) {
+                                if (data.success) {
+                                    var instanceId = data.location ? data.location.split('/').pop() : instance.id;
+                                    var newinstance = lwResources.addInstance(scope.object, instanceId, null);
+                                    for (var i in payload.resources) {
+                                        var tlvresource = payload.resources[i];
+                                        resource = lwResources.addResource(scope.object, newinstance, tlvresource.id, null);
+                                        resource.value = tlvresource.value;
+                                        resource.valuesupposed = true;
+                                        resource.tooltip = formattedDate;
+                                    }
+                                }
+                            });
+                        }).error(function(data, status, headers, config) {
+                            if (status == 504){
+                                helper.handleResponse(null, scope.object.create)
+                            } else {
+                                errormessage = "Unable to create instance " + instancepath + " for "+ $routeParams.clientId + " : " + status +" "+ data;
+                                dialog.open(errormessage);
+                            }
+                            console.error(errormessage);
+                        });
+                    });
                 });
             };
         }
-    }
+    };
 });

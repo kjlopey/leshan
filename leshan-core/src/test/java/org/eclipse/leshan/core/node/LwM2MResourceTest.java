@@ -2,11 +2,11 @@
  * Copyright (c) 2013-2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -118,22 +118,22 @@ public class LwM2MResourceTest {
                 LwM2mMultipleResource.newBinaryResource(10, values2));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test(expected = LwM2mNodeException.class)
     public void string_resource_with_null_value() {
         LwM2mSingleResource.newStringResource(1, null);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test(expected = LwM2mNodeException.class)
     public void generic_resource_with_null_value() {
         LwM2mSingleResource.newResource(1, null, Type.INTEGER);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test(expected = LwM2mNodeException.class)
     public void generic_instance_with_incompatible_value_and_type() {
         LwM2mSingleResource.newResource(0, "a string", Type.BOOLEAN);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test(expected = LwM2mNodeException.class)
     public void integer_multi_instances_resource_with_null_value() {
         Map<Integer, Long> values = new HashMap<>();
         values.put(2, 2L);
@@ -141,7 +141,7 @@ public class LwM2MResourceTest {
         LwM2mMultipleResource.newIntegerResource(0, values);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test(expected = LwM2mNodeException.class)
     public void generic_multi_instances_resource_with_null_value() {
         Map<Integer, String> values = new HashMap<>();
         values.put(2, "value");
@@ -149,7 +149,7 @@ public class LwM2MResourceTest {
         LwM2mMultipleResource.newResource(0, values, Type.STRING);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test(expected = LwM2mNodeException.class)
     public void generic_multi_instance_with_incompatible_value_and_type() {
         Map<Integer, String> values = new HashMap<>();
         values.put(2, "value");

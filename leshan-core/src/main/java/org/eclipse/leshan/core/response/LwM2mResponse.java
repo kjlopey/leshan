@@ -2,11 +2,11 @@
  * Copyright (c) 2013-2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -15,7 +15,7 @@
  *******************************************************************************/
 package org.eclipse.leshan.core.response;
 
-import org.eclipse.leshan.ResponseCode;
+import org.eclipse.leshan.core.ResponseCode;
 
 /**
  * A response to Lightweight M2M request.
@@ -55,4 +55,9 @@ public interface LwM2mResponse {
      * @return true if we get an error or unexpected code.
      */
     boolean isFailure();
+
+    /**
+     * @return true if we get a valid response code, a code expected by the LWM2M spec.
+     */
+    boolean isValid();
 }

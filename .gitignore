@@ -20,7 +20,20 @@ bin/
 .idea/
 *.iml
 
+# Visual Studio Code files #
+.vscode/
+
 # Package Files #
 *.jar
 *.war
 *.ear
+
+# log Files #
+**/src/main/**/logback*.xml
+**/src/test/**/logback*.xml
+
+# Credentials files #
+**/*.der
+**/*.pem
+**/*.srl
+!**/src/**/*.der

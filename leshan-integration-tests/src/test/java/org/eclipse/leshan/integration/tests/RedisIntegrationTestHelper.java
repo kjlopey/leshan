@@ -2,11 +2,11 @@
  * Copyright (c) 2016 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -20,16 +20,13 @@ import java.net.InetSocketAddress;
 
 import org.eclipse.leshan.core.node.codec.DefaultLwM2mNodeDecoder;
 import org.eclipse.leshan.server.californium.LeshanServerBuilder;
-import org.eclipse.leshan.server.client.Client;
-import org.eclipse.leshan.server.client.ClientRegistryListener;
-import org.eclipse.leshan.server.client.ClientUpdate;
-import org.eclipse.leshan.server.cluster.RedisRegistrationStore;
-import org.eclipse.leshan.server.impl.SecurityRegistryImpl;
 import org.eclipse.leshan.server.model.StaticModelProvider;
+import org.eclipse.leshan.server.redis.RedisRegistrationStore;
+import org.eclipse.leshan.server.security.InMemorySecurityStore;
 
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import redis.clients.util.Pool;
+import redis.clients.jedis.util.Pool;
 
 public class RedisIntegrationTestHelper extends IntegrationTestHelper {
     @Override
@@ -41,20 +38,7 @@ public class RedisIntegrationTestHelper extends IntegrationTestHelper {
         builder.setDecoder(decoder);
         builder.setLocalAddress(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
         builder.setLocalSecureAddress(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
-        builder.setSecurityRegistry(new SecurityRegistryImpl() {
-            // TODO we should separate SecurityRegistryImpl in 2 registries :
-            // InMemorySecurityRegistry and PersistentSecurityRegistry
-
-            @Override
-            protected void loadFromFile() {
-                // do not load From File
-            }
-
-            @Override
-            protected void saveToFile() {
-                // do not save to file
-            }
-        });
+        builder.setSecurityStore(new InMemorySecurityStore());
 
         // Create redis store
         String redisURI = System.getenv("REDIS_URI");
@@ -66,29 +50,6 @@ public class RedisIntegrationTestHelper extends IntegrationTestHelper {
         // Build server !
         server = builder.build();
         // monitor client registration
-        resetLatch();
-        server.getClientRegistry().addListener(new ClientRegistryListener() {
-            @Override
-            public void updated(ClientUpdate update, Client clientUpdated) {
-                if (clientUpdated.getEndpoint().equals(getCurrentEndpoint())) {
-                    updateLatch.countDown();
-                }
-            }
-
-            @Override
-            public void unregistered(Client client) {
-                if (client.getEndpoint().equals(getCurrentEndpoint())) {
-                    deregisterLatch.countDown();
-                }
-            }
-
-            @Override
-            public void registered(Client client) {
-                if (client.getEndpoint().equals(getCurrentEndpoint())) {
-                    last_registration = client;
-                    registerLatch.countDown();
-                }
-            }
-        });
+        setupServerMonitoring();
     }
 }

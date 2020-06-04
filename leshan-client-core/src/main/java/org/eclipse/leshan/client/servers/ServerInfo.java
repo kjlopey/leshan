@@ -2,11 +2,11 @@
  * Copyright (c) 2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -18,18 +18,39 @@ package org.eclipse.leshan.client.servers;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.cert.Certificate;
 
+import org.eclipse.leshan.core.LwM2m;
+import org.eclipse.leshan.core.SecurityMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Sensible information about a LWM2M server or a LWM2M Bootstrap sever.
+ * <p>
+ * It contains mainly information available in LWM2M Security Object.
+ */
 public class ServerInfo {
 
     private static final Logger LOG = LoggerFactory.getLogger(ServerInfo.class);
 
     public long serverId;
+    public boolean bootstrap = false;
     public URI serverUri;
-    // TODO use SecureMode from server.core
-    public long secureMode;
+    public SecurityMode secureMode;
+
+    public String pskId;
+    public byte[] pskKey;
+
+    public PublicKey publicKey;
+    public PublicKey serverPublicKey;
+
+    public Certificate clientCertificate;
+    public Certificate serverCertificate;
+
+    public PrivateKey privateKey;
 
     public InetSocketAddress getAddress() {
         return getAddress(serverUri);
@@ -40,7 +61,7 @@ public class ServerInfo {
     }
 
     public boolean isSecure() {
-        return secureMode != 3;
+        return secureMode != SecurityMode.NO_SEC;
     }
 
     @Override
@@ -53,17 +74,17 @@ public class ServerInfo {
         int port = serverUri.getPort();
         if (port == -1) {
             if ("coap".equals(serverUri.getScheme())) {
-                port = 5683;
+                port = LwM2m.DEFAULT_COAP_PORT;
             } else if ("coaps".equals(serverUri.getScheme())) {
-                port = 5684;
+                port = LwM2m.DEFAULT_COAP_SECURE_PORT;
             }
         }
         // define scheme
         String scheme = serverUri.getScheme();
         if (scheme == null) {
-            if (port == 5683) {
+            if (port == LwM2m.DEFAULT_COAP_PORT) {
                 scheme = "coap";
-            } else if (port == 5684) {
+            } else if (port == LwM2m.DEFAULT_COAP_SECURE_PORT) {
                 scheme = "coaps";
             }
         }

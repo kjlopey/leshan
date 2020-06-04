@@ -2,11 +2,11 @@
  * Copyright (c) 2013-2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -21,33 +21,38 @@ import static org.junit.Assert.*;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 
-import org.eclipse.leshan.LwM2mId;
-import org.eclipse.leshan.client.LwM2mClient;
+import org.eclipse.leshan.client.californium.LeshanClient;
 import org.eclipse.leshan.client.californium.LeshanClientBuilder;
 import org.eclipse.leshan.client.object.Device;
 import org.eclipse.leshan.client.object.Security;
-import org.eclipse.leshan.client.object.Server;
+import org.eclipse.leshan.client.resource.DummyInstanceEnabler;
 import org.eclipse.leshan.client.resource.LwM2mObjectEnabler;
 import org.eclipse.leshan.client.resource.ObjectsInitializer;
-import org.eclipse.leshan.core.model.LwM2mModel;
+import org.eclipse.leshan.client.resource.SimpleInstanceEnabler;
+import org.eclipse.leshan.client.servers.ServerIdentity;
+import org.eclipse.leshan.core.LwM2mId;
 import org.eclipse.leshan.core.model.ObjectLoader;
 import org.eclipse.leshan.core.model.ObjectModel;
 import org.eclipse.leshan.core.model.ResourceModel;
 import org.eclipse.leshan.core.model.ResourceModel.Operations;
 import org.eclipse.leshan.core.model.ResourceModel.Type;
+import org.eclipse.leshan.core.model.StaticModel;
+import org.eclipse.leshan.core.node.codec.DefaultLwM2mNodeDecoder;
+import org.eclipse.leshan.core.node.codec.DefaultLwM2mNodeEncoder;
 import org.eclipse.leshan.core.request.BindingMode;
 import org.eclipse.leshan.core.response.ExecuteResponse;
+import org.eclipse.leshan.server.californium.LeshanServer;
 import org.eclipse.leshan.server.californium.LeshanServerBuilder;
-import org.eclipse.leshan.server.californium.impl.LeshanServer;
-import org.eclipse.leshan.server.client.Client;
-import org.eclipse.leshan.server.client.ClientRegistryListener;
-import org.eclipse.leshan.server.client.ClientUpdate;
-import org.eclipse.leshan.server.impl.SecurityRegistryImpl;
 import org.eclipse.leshan.server.model.StaticModelProvider;
+import org.eclipse.leshan.server.registration.Registration;
+import org.eclipse.leshan.server.registration.RegistrationServiceImpl;
+import org.eclipse.leshan.server.security.InMemorySecurityStore;
 
 /**
  * Helper for running a server and executing a client against it.
@@ -55,7 +60,7 @@ import org.eclipse.leshan.server.model.StaticModelProvider;
  */
 public class IntegrationTestHelper {
     public static final Random r = new Random();
-    
+
     static final String MODEL_NUMBER = "IT-TEST-123";
     public static final long LIFETIME = 2;
 
@@ -68,16 +73,20 @@ public class IntegrationTestHelper {
     public static final int OPAQUE_RESOURCE_ID = 5;
     public static final int OBJLNK_MULTI_INSTANCE_RESOURCE_ID = 6;
     public static final int OBJLNK_SINGLE_INSTANCE_RESOURCE_ID = 7;
+    public static final int INTEGER_MANDATORY_RESOURCE_ID = 8;
+    public static final int STRING_MANDATORY_RESOURCE_ID = 9;
 
     LeshanServer server;
+    LeshanClient client;
+    AtomicReference<String> currentEndpointIdentifier = new AtomicReference<String>();
 
-    LwM2mClient client;
-    String currentEndpointIdentifier;
-
-    CountDownLatch registerLatch;
-    Client last_registration;
-    CountDownLatch deregisterLatch;
-    CountDownLatch updateLatch;
+    private SynchronousClientObserver clientObserver = new SynchronousClientObserver();
+    private SynchronousRegistrationListener registrationListener = new SynchronousRegistrationListener() {
+        @Override
+        public boolean accept(Registration registration) {
+            return (registration != null && registration.getEndpoint().equals(currentEndpointIdentifier.get()));
+        }
+    };
 
     protected List<ObjectModel> createObjectModels() {
         // load default object from the spec
@@ -95,140 +104,204 @@ public class IntegrationTestHelper {
                 null, null, null);
         ResourceModel opaquefield = new ResourceModel(OPAQUE_RESOURCE_ID, "opaque", Operations.RW, false, false,
                 Type.OPAQUE, null, null, null);
-        ResourceModel objlnkfield = new ResourceModel(OBJLNK_MULTI_INSTANCE_RESOURCE_ID, "objlnk", Operations.RW, true, false, Type.OBJLNK, 
-                null, null, null);
-        ResourceModel objlnkSinglefield = new ResourceModel(OBJLNK_SINGLE_INSTANCE_RESOURCE_ID, "objlnk", Operations.RW, false, false, Type.OBJLNK,
-                null, null, null);
-        objectModels.add(new ObjectModel(TEST_OBJECT_ID, "testobject", null, false, false, stringfield, booleanfield,
-                integerfield, floatfield, timefield, opaquefield, objlnkfield, objlnkSinglefield));
+        ResourceModel objlnkfield = new ResourceModel(OBJLNK_MULTI_INSTANCE_RESOURCE_ID, "objlnk", Operations.RW, true,
+                false, Type.OBJLNK, null, null, null);
+        ResourceModel objlnkSinglefield = new ResourceModel(OBJLNK_SINGLE_INSTANCE_RESOURCE_ID, "objlnk", Operations.RW,
+                false, false, Type.OBJLNK, null, null, null);
+        ResourceModel integermandatoryfield = new ResourceModel(INTEGER_MANDATORY_RESOURCE_ID, "integermandatory",
+                Operations.RW, false, true, Type.INTEGER, null, null, null);
+        ResourceModel stringmandatoryfield = new ResourceModel(STRING_MANDATORY_RESOURCE_ID, "stringmandatory",
+                Operations.RW, false, true, Type.STRING, null, null, null);
+        objectModels.add(new ObjectModel(TEST_OBJECT_ID, "testobject", null, ObjectModel.DEFAULT_VERSION, true, false,
+                stringfield, booleanfield, integerfield, floatfield, timefield, opaquefield, objlnkfield,
+                objlnkSinglefield, integermandatoryfield, stringmandatoryfield));
 
         return objectModels;
     }
 
     public void initialize() {
-        currentEndpointIdentifier = "leshan_integration_test_" + r.nextInt();
+        currentEndpointIdentifier.set("leshan_integration_test_" + r.nextInt());
     }
 
     public String getCurrentEndpoint() {
-        return currentEndpointIdentifier;
+        return currentEndpointIdentifier.get();
     }
 
     public void createClient() {
-        // Create objects Enabler
-        ObjectsInitializer initializer = new ObjectsInitializer(new LwM2mModel(createObjectModels()));
-        initializer.setInstancesForObject(LwM2mId.SECURITY, Security.noSec(
-                "coap://" + server.getNonSecureAddress().getHostString() + ":" + server.getNonSecureAddress().getPort(),
-                12345));
-        initializer.setInstancesForObject(LwM2mId.SERVER, new Server(12345, LIFETIME, BindingMode.U, false));
-        initializer.setInstancesForObject(LwM2mId.DEVICE, new Device("Eclipse Leshan", MODEL_NUMBER, "12345", "U") {
-            @Override
-            public ExecuteResponse execute(int resourceid, String params) {
-                if (resourceid == 4) {
-                    return ExecuteResponse.success();
-                } else {
-                    return super.execute(resourceid, params);
-                }
+        createClient(null);
+    }
+
+    public static class TestDevice extends Device {
+
+        public TestDevice() {
+            super();
+        }
+
+        public TestDevice(String manufacturer, String modelNumber, String serialNumber, String supportedBinding) {
+            super(manufacturer, modelNumber, serialNumber, supportedBinding);
+        }
+
+        @Override
+        public ExecuteResponse execute(ServerIdentity identity, int resourceid, String params) {
+            if (resourceid == 4) {
+                return ExecuteResponse.success();
+            } else {
+                return super.execute(identity, resourceid, params);
             }
-        });
-        List<LwM2mObjectEnabler> objects = initializer.createMandatory();
-        objects.addAll(initializer.create(2, 2000));
+        }
+    }
+
+    public void createClient(Map<String, String> additionalAttributes) {
+        // Create objects Enabler
+        ObjectsInitializer initializer = new ObjectsInitializer(new StaticModel(createObjectModels()));
+        initializer.setInstancesForObject(LwM2mId.SECURITY, Security.noSec(
+                "coap://" + server.getUnsecuredAddress().getHostString() + ":" + server.getUnsecuredAddress().getPort(),
+                12345));
+        initializer.setInstancesForObject(LwM2mId.SERVER,
+                new org.eclipse.leshan.client.object.Server(12345, LIFETIME, BindingMode.U, false));
+        initializer.setInstancesForObject(LwM2mId.DEVICE, new TestDevice("Eclipse Leshan", MODEL_NUMBER, "12345", "U"));
+        initializer.setClassForObject(LwM2mId.ACCESS_CONTROL, DummyInstanceEnabler.class);
+        initializer.setInstancesForObject(TEST_OBJECT_ID, new DummyInstanceEnabler(0),
+                new SimpleInstanceEnabler(1, OPAQUE_RESOURCE_ID, new byte[0]));
+        List<LwM2mObjectEnabler> objects = initializer.createAll();
 
         // Build Client
-        LeshanClientBuilder builder = new LeshanClientBuilder(currentEndpointIdentifier);
+        LeshanClientBuilder builder = new LeshanClientBuilder(currentEndpointIdentifier.get());
+        builder.setDecoder(new DefaultLwM2mNodeDecoder(true));
+        builder.setAdditionalAttributes(additionalAttributes);
         builder.setObjects(objects);
         client = builder.build();
+        setupClientMonitoring();
     }
 
     public void createServer() {
+        server = createServerBuilder().build();
+        // monitor client registration
+        setupServerMonitoring();
+    }
+
+    protected LeshanServerBuilder createServerBuilder() {
         LeshanServerBuilder builder = new LeshanServerBuilder();
+        builder.setEncoder(new DefaultLwM2mNodeEncoder(true));
         builder.setObjectModelProvider(new StaticModelProvider(createObjectModels()));
         builder.setLocalAddress(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
         builder.setLocalSecureAddress(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
-        builder.setSecurityRegistry(new SecurityRegistryImpl() {
-            // TODO we should separate SecurityRegistryImpl in 2 registries :
-            // InMemorySecurityRegistry and PersistentSecurityRegistry
-
-            @Override
-            protected void loadFromFile() {
-                // do not load From File
-            }
-
-            @Override
-            protected void saveToFile() {
-                // do not save to file
-            }
-        });
-        server = builder.build();
-        // monitor client registration
-        resetLatch();
-        server.getClientRegistry().addListener(new ClientRegistryListener() {
-            @Override
-            public void updated(ClientUpdate update, Client clientUpdated) {
-                if (clientUpdated.getEndpoint().equals(currentEndpointIdentifier)) {
-                    updateLatch.countDown();
-                }
-            }
-
-            @Override
-            public void unregistered(Client client) {
-                if (client.getEndpoint().equals(currentEndpointIdentifier)) {
-                    deregisterLatch.countDown();
-                }
-            }
-
-            @Override
-            public void registered(Client client) {
-                if (client.getEndpoint().equals(currentEndpointIdentifier)) {
-                    last_registration = client;
-                    registerLatch.countDown();
-                }
-            }
-        });
+        builder.setSecurityStore(new InMemorySecurityStore());
+        return builder;
     }
 
-    public void resetLatch() {
-        registerLatch = new CountDownLatch(1);
-        deregisterLatch = new CountDownLatch(1);
-        updateLatch = new CountDownLatch(1);
+    protected void setupServerMonitoring() {
+        server.getRegistrationService().addListener(registrationListener);
     }
 
-    public boolean waitForRegistration(long timeInSeconds) {
+    protected void setupClientMonitoring() {
+        client.addObserver(clientObserver);
+    }
+
+    public void waitForRegistrationAtClientSide(long timeInSeconds) {
         try {
-            return registerLatch.await(timeInSeconds, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
+            assertTrue(clientObserver.waitForRegistration(timeInSeconds, TimeUnit.SECONDS));
+        } catch (InterruptedException | TimeoutException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public boolean waitForUpdate(long timeInSeconds) {
+    public void waitForRegistrationAtServerSide(long timeInSeconds) {
         try {
-            return updateLatch.await(timeInSeconds, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
+            registrationListener.waitForRegister(timeInSeconds, TimeUnit.SECONDS);
+        } catch (InterruptedException | TimeoutException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public boolean waitForDeregistration(long timeInSeconds) {
+    public void ensureNoRegistration(long timeInSeconds) {
         try {
-            return deregisterLatch.await(timeInSeconds, TimeUnit.SECONDS);
+            registrationListener.waitForRegister(timeInSeconds, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } catch (TimeoutException e) {
+            // timeou means no registration
+            return;
+        }
+        fail("No registration expected");
+    }
+
+    public void waitForUpdateAtClientSide(long timeInSeconds) {
+        try {
+            assertTrue(clientObserver.waitForUpdate(timeInSeconds, TimeUnit.SECONDS));
+        } catch (InterruptedException | TimeoutException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public Client getCurrentRegistration() {
-        return server.getClientRegistry().get(currentEndpointIdentifier);
+    public void waitForBootstrapFinishedAtClientSide(long timeInSeconds) {
+        try {
+            assertTrue(clientObserver.waitForBootstrap(timeInSeconds, TimeUnit.SECONDS));
+        } catch (InterruptedException | TimeoutException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void ensureNoUpdate(long timeInSeconds) {
+        try {
+            registrationListener.waitForUpdate(timeInSeconds, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } catch (TimeoutException e) {
+            // timeout means no registration
+            return;
+        }
+        fail("No update registration expected");
+    }
+
+    public void waitForDeregistrationAtServerSide(long timeInSeconds) {
+        try {
+            registrationListener.waitForDeregister(timeInSeconds, TimeUnit.SECONDS);
+        } catch (InterruptedException | TimeoutException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void waitForDeregistrationAtClientSide(long timeInSeconds) {
+        try {
+            assertTrue(clientObserver.waitForDeregistration(timeInSeconds, TimeUnit.SECONDS));
+        } catch (InterruptedException | TimeoutException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void ensureNoDeregistration(long timeInSeconds) {
+        try {
+            registrationListener.waitForDeregister(timeInSeconds, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } catch (TimeoutException e) {
+            // timeout means no registration
+            return;
+        }
+        fail("No de-registration expected");
+    }
+
+    public Registration getCurrentRegistration() {
+        return server.getRegistrationService().getByEndpoint(currentEndpointIdentifier.get());
+    }
+
+    public ServerIdentity getCurrentRegisteredServer() {
+        Map<String, ServerIdentity> registeredServers = client.getRegisteredServers();
+        if (registeredServers != null && !registeredServers.isEmpty())
+            return registeredServers.values().iterator().next();
+        return null;
     }
 
     public void deregisterClient() {
-        Client c = getCurrentRegistration();
-        if (c != null)
-            server.getClientRegistry().deregisterClient(c.getRegistrationId());
+        Registration r = getCurrentRegistration();
+        if (r != null)
+            ((RegistrationServiceImpl) server.getRegistrationService()).getStore().removeRegistration(r.getId());
     }
 
     public void dispose() {
         deregisterClient();
-        currentEndpointIdentifier = null;
+        currentEndpointIdentifier.set(null);
     }
 
     public void assertClientRegisterered() {
@@ -237,5 +310,9 @@ public class IntegrationTestHelper {
 
     public void assertClientNotRegisterered() {
         assertNull(getCurrentRegistration());
+    }
+
+    public Registration getLastRegistration() {
+        return registrationListener.getLastRegistration();
     }
 }

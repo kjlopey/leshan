@@ -2,11 +2,11 @@
  * Copyright (c) 2013-2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -15,57 +15,62 @@
  *******************************************************************************/
 package org.eclipse.leshan.core.request;
 
-import org.eclipse.leshan.ObserveSpec;
+import org.eclipse.leshan.core.attributes.AttributeSet;
 import org.eclipse.leshan.core.node.LwM2mPath;
+import org.eclipse.leshan.core.request.exception.InvalidRequestException;
 import org.eclipse.leshan.core.response.WriteAttributesResponse;
-import org.eclipse.leshan.util.Validate;
 
 public class WriteAttributesRequest extends AbstractDownlinkRequest<WriteAttributesResponse> {
 
-    private final ObserveSpec observeSpec;
+    private final AttributeSet attributes;
 
-    public WriteAttributesRequest(final int objectId, final ObserveSpec observeSpec) {
-        this(new LwM2mPath(objectId), observeSpec);
+    public WriteAttributesRequest(int objectId, AttributeSet attributes) throws InvalidRequestException {
+        this(new LwM2mPath(objectId), attributes);
     }
 
-    public WriteAttributesRequest(final int objectId, final int objectInstanceId, final ObserveSpec observeSpec) {
-        this(new LwM2mPath(objectId, objectInstanceId), observeSpec);
+    public WriteAttributesRequest(int objectId, int objectInstanceId, AttributeSet attributes)
+            throws InvalidRequestException {
+        this(new LwM2mPath(objectId, objectInstanceId), attributes);
     }
 
-    public WriteAttributesRequest(final int objectId, final int objectInstanceId, final int resourceId,
-            final ObserveSpec observeSpec) {
-        this(new LwM2mPath(objectId, objectInstanceId, resourceId), observeSpec);
+    public WriteAttributesRequest(int objectId, int objectInstanceId, int resourceId, AttributeSet attributes)
+            throws InvalidRequestException {
+        this(new LwM2mPath(objectId, objectInstanceId, resourceId), attributes);
     }
 
-    public WriteAttributesRequest(final String path, final ObserveSpec observeSpec) {
-        this(new LwM2mPath(path), observeSpec);
+    public WriteAttributesRequest(String path, AttributeSet attributes) {
+        this(newPath(path), attributes);
     }
 
-    private WriteAttributesRequest(final LwM2mPath path, final ObserveSpec observeSpec) {
+    private WriteAttributesRequest(LwM2mPath path, AttributeSet attributes) throws InvalidRequestException {
         super(path);
-        Validate.notNull(observeSpec);
-        this.observeSpec = observeSpec;
+        if (path.isRoot())
+            throw new InvalidRequestException("WriteAttributes request cannot target root path");
+
+        if (attributes == null)
+            throw new InvalidRequestException("attributes are mandatory for %s", path);
+        this.attributes = attributes;
     }
 
     @Override
-    public void accept(final DownlinkRequestVisitor visitor) {
+    public void accept(DownlinkRequestVisitor visitor) {
         visitor.visit(this);
     }
 
-    public ObserveSpec getObserveSpec() {
-        return this.observeSpec;
+    public AttributeSet getAttributes() {
+        return this.attributes;
     }
 
     @Override
     public String toString() {
-        return String.format("WriteAttributesRequest [%s, attributes=%s]", getPath(), getObserveSpec());
+        return String.format("WriteAttributesRequest [%s, attributes=%s]", getPath(), getAttributes());
     }
 
     @Override
     public int hashCode() {
         final int prime = 31;
         int result = super.hashCode();
-        result = prime * result + ((observeSpec == null) ? 0 : observeSpec.hashCode());
+        result = prime * result + ((attributes == null) ? 0 : attributes.hashCode());
         return result;
     }
 
@@ -78,10 +83,10 @@ public class WriteAttributesRequest extends AbstractDownlinkRequest<WriteAttribu
         if (getClass() != obj.getClass())
             return false;
         WriteAttributesRequest other = (WriteAttributesRequest) obj;
-        if (observeSpec == null) {
-            if (other.observeSpec != null)
+        if (attributes == null) {
+            if (other.attributes != null)
                 return false;
-        } else if (!observeSpec.equals(other.observeSpec))
+        } else if (!attributes.equals(other.attributes))
             return false;
         return true;
     }

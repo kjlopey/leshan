@@ -2,11 +2,11 @@
  * Copyright (c) 2013-2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -17,10 +17,11 @@ package org.eclipse.leshan.core.response;
 
 import java.util.List;
 
-import org.eclipse.leshan.ResponseCode;
+import org.eclipse.leshan.core.ResponseCode;
 import org.eclipse.leshan.core.node.LwM2mNode;
 import org.eclipse.leshan.core.node.TimestampedLwM2mNode;
 import org.eclipse.leshan.core.observation.Observation;
+import org.eclipse.leshan.core.request.exception.InvalidResponseException;
 
 /**
  * Specialized ReadResponse to a Observe request, with the corresponding Observation.
@@ -29,8 +30,8 @@ import org.eclipse.leshan.core.observation.Observation;
  */
 public class ObserveResponse extends ReadResponse {
 
-    private final Observation observation;
-    private final List<TimestampedLwM2mNode> timestampedValues;
+    protected final Observation observation;
+    protected final List<TimestampedLwM2mNode> timestampedValues;
 
     public ObserveResponse(ResponseCode code, LwM2mNode content, List<TimestampedLwM2mNode> timestampedValues,
             Observation observation, String errorMessage) {
@@ -42,6 +43,12 @@ public class ObserveResponse extends ReadResponse {
         super(code, timestampedValues != null && !timestampedValues.isEmpty() ? timestampedValues.get(0).getNode()
                 : content, errorMessage, coapResponse);
 
+        // CHANGED is out of spec but is supported for backward compatibility. (previous draft version)
+        if (ResponseCode.CHANGED.equals(code)) {
+            if (content == null)
+                throw new InvalidResponseException("Content is mandatory for successful response");
+        }
+
         this.observation = observation;
         this.timestampedValues = timestampedValues;
     }
@@ -52,7 +59,8 @@ public class ObserveResponse extends ReadResponse {
 
     @Override
     public boolean isSuccess() {
-        return getCode() == ResponseCode.CONTENT;
+        // CHANGED is out of spec but is supported for backward compatibility. (previous draft version)
+        return getCode().equals(ResponseCode.CONTENT) || getCode().equals(ResponseCode.CHANGED);
     }
 
     @Override

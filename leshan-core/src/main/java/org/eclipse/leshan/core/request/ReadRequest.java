@@ -2,11 +2,11 @@
  * Copyright (c) 2013-2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -16,6 +16,7 @@
 package org.eclipse.leshan.core.request;
 
 import org.eclipse.leshan.core.node.LwM2mPath;
+import org.eclipse.leshan.core.request.exception.InvalidRequestException;
 import org.eclipse.leshan.core.response.ReadResponse;
 
 /**
@@ -26,7 +27,7 @@ import org.eclipse.leshan.core.response.ReadResponse;
  */
 public class ReadRequest extends AbstractDownlinkRequest<ReadResponse> {
 
-    private ContentFormat format;
+    private final ContentFormat format;
 
     /**
      * Creates a request for reading all instances of a particular object from a client.
@@ -114,13 +115,16 @@ public class ReadRequest extends AbstractDownlinkRequest<ReadResponse> {
 
     private ReadRequest(ContentFormat format, LwM2mPath target) {
         super(target);
+        if (target.isRoot())
+            throw new InvalidRequestException("Read request cannot target root path");
+
         this.format = format;
     }
 
     /**
      * @return the desired format of the resource to read
      */
-    public ContentFormat getFormat() {
+    public ContentFormat getContentFormat() {
         return format;
     }
 

@@ -2,11 +2,11 @@
  * Copyright (c) 2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -19,17 +19,17 @@ package org.eclipse.leshan.server.bootstrap.demo.servlet;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import org.apache.commons.io.Charsets;
 import org.apache.commons.lang.StringUtils;
 import org.eclipse.leshan.server.bootstrap.BootstrapConfig;
-import org.eclipse.leshan.server.bootstrap.demo.BootstrapStoreImpl;
-import org.eclipse.leshan.server.bootstrap.demo.ConfigurationChecker.ConfigurationException;
+import org.eclipse.leshan.server.bootstrap.EditableBootstrapConfigStore;
+import org.eclipse.leshan.server.bootstrap.InvalidConfigurationException;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -45,8 +45,9 @@ import com.google.gson.JsonSyntaxException;
 /**
  * Servlet for REST API in charge of adding bootstrap information to the bootstrap server.
  */
-@SuppressWarnings("serial")
 public class BootstrapServlet extends HttpServlet {
+
+    private static final long serialVersionUID = 1L;
 
     private static class SignedByteUnsignedByteAdapter implements JsonSerializer<Byte>, JsonDeserializer<Byte> {
 
@@ -62,11 +63,11 @@ public class BootstrapServlet extends HttpServlet {
         }
     }
 
-    private final BootstrapStoreImpl bsStore;
+    private final EditableBootstrapConfigStore bsStore;
 
     private final Gson gson;
 
-    public BootstrapServlet(BootstrapStoreImpl bsStore) {
+    public BootstrapServlet(EditableBootstrapConfigStore bsStore) {
         this.bsStore = bsStore;
 
         this.gson = new GsonBuilder().registerTypeHierarchyAdapter(Byte.class, new SignedByteUnsignedByteAdapter())
@@ -76,20 +77,20 @@ public class BootstrapServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         if (req.getPathInfo() != null) {
-            resp.sendError(HttpServletResponse.SC_NOT_FOUND);
+            sendError(resp, HttpServletResponse.SC_NOT_FOUND, "bad URL");
             return;
         }
 
         resp.setStatus(HttpServletResponse.SC_OK);
         resp.setContentType("application/json");
-        resp.getOutputStream().write(gson.toJson(bsStore.getBootstrapConfigs()).getBytes(Charsets.UTF_8));
+        resp.getOutputStream().write(gson.toJson(bsStore.getAll()).getBytes(StandardCharsets.UTF_8));
     }
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         if (req.getPathInfo() == null) {
             // we need the endpoint in the URL
-            resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "endpoint name should be specified in the URL");
+            sendError(resp, HttpServletResponse.SC_BAD_REQUEST, "endpoint name should be specified in the URL");
             return;
         }
 
@@ -97,7 +98,7 @@ public class BootstrapServlet extends HttpServlet {
 
         // endPoint
         if (path.length != 1) {
-            resp.sendError(HttpServletResponse.SC_BAD_REQUEST,
+            sendError(resp, HttpServletResponse.SC_BAD_REQUEST,
                     "endpoint name should be specified in the URL, nothing more");
             return;
         }
@@ -108,15 +109,13 @@ public class BootstrapServlet extends HttpServlet {
             BootstrapConfig cfg = gson.fromJson(new InputStreamReader(req.getInputStream()), BootstrapConfig.class);
 
             if (cfg == null) {
-                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "no content");
+                sendError(resp, HttpServletResponse.SC_BAD_REQUEST, "no content");
             } else {
-                bsStore.addConfig(endpoint, cfg);
+                bsStore.add(endpoint, cfg);
                 resp.setStatus(HttpServletResponse.SC_OK);
             }
-        } catch (JsonSyntaxException jsonEx) {
-            resp.sendError(HttpServletResponse.SC_BAD_REQUEST, jsonEx.getMessage());
-        } catch (ConfigurationException e) {
-            resp.sendError(HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
+        } catch (JsonSyntaxException | InvalidConfigurationException e) {
+            sendError(resp, HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
         }
     }
 
@@ -124,7 +123,7 @@ public class BootstrapServlet extends HttpServlet {
     protected void doDelete(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         if (req.getPathInfo() == null) {
             // we need the endpoint in the URL
-            resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "endpoint name should be specified in the URL");
+            sendError(resp, HttpServletResponse.SC_BAD_REQUEST, "endpoint name should be specified in the URL");
             return;
         }
 
@@ -132,17 +131,24 @@ public class BootstrapServlet extends HttpServlet {
 
         // endPoint
         if (path.length != 1) {
-            resp.sendError(HttpServletResponse.SC_BAD_REQUEST,
+            sendError(resp, HttpServletResponse.SC_BAD_REQUEST,
                     "endpoint name should be specified in the URL, nothing more");
             return;
         }
 
         String endpoint = path[0];
 
-        if (bsStore.deleteConfig(endpoint)) {
+        if (bsStore.remove(endpoint) != null) {
             resp.setStatus(HttpServletResponse.SC_NO_CONTENT);
         } else {
-            resp.sendError(HttpServletResponse.SC_NOT_FOUND);
+            sendError(resp, HttpServletResponse.SC_NOT_FOUND, "no config for " + endpoint);
         }
+    }
+
+    private void sendError(HttpServletResponse resp, int statusCode, String errorMessage) throws IOException {
+        resp.setStatus(statusCode);
+        resp.setContentType("text/plain; charset=UTF-8");
+        if (errorMessage != null)
+            resp.getOutputStream().write(errorMessage.getBytes(StandardCharsets.UTF_8));
     }
 }

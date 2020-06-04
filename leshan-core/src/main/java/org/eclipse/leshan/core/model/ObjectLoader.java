@@ -2,11 +2,11 @@
  * Copyright (c) 2013-2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -25,26 +25,18 @@ import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.eclipse.leshan.core.model.json.ObjectModelDeserializer;
-import org.eclipse.leshan.core.model.json.ResourceModelDeserializer;
+import org.eclipse.leshan.core.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 
 public class ObjectLoader {
 
     private static final Logger LOG = LoggerFactory.getLogger(ObjectLoader.class);
 
-    private static final Gson GSON;
-
-    static {
-        GsonBuilder gsonBuilder = new GsonBuilder();
-        gsonBuilder.registerTypeAdapter(ObjectModel.class, new ObjectModelDeserializer());
-        gsonBuilder.registerTypeAdapter(ResourceModel.class, new ResourceModelDeserializer());
-        GSON = gsonBuilder.create();
-    }
+    private static final String[] ddfpaths = new String[] { "LWM2M_Security-v1_0.xml", "LWM2M_Server-v1_0.xml",
+                            "LWM2M_Access_Control-v1_0_3.xml", "LWM2M_Device-v1_0_3.xml",
+                            "LWM2M_Connectivity_Monitoring-v1_0_2.xml", "LWM2M_Firmware_Update-v1_0_3.xml",
+                            "LWM2M_Location-v1_0_2.xml", "LWM2M_Connectivity_Statistics-v1_0_4.xml" };
 
     /**
      * Load the default LWM2M objects
@@ -54,20 +46,7 @@ public class ObjectLoader {
 
         // standard objects
         LOG.debug("Loading OMA standard object models");
-        InputStream input = ObjectLoader.class.getResourceAsStream("/oma-objects-spec.json");
-        if (input != null) {
-            try (Reader reader = new InputStreamReader(input)) {
-                models.addAll(loadJsonStream(input));
-            } catch (IOException e) {
-                LOG.error("Unable to load object models", e);
-            }
-        }
-
-        // custom objects (environment variable)
-        String modelsFolderEnvVar = System.getenv("MODELS_FOLDER");
-        if (modelsFolderEnvVar != null) {
-            models.addAll(loadObjectsFromDir(new File(modelsFolderEnvVar)));
-        }
+        models.addAll(loadDdfResources("/models/", ddfpaths));
 
         return models;
     }
@@ -84,25 +63,60 @@ public class ObjectLoader {
     /**
      * Load object definition from DDF file.
      * 
-     * @param input An inputStream to a DFF file.
+     * @param input An inputStream to a DDF file.
      * @param streamName A name for the stream used for logging only
      */
-    public static ObjectModel loadDdfFile(InputStream input, String streamName) {
+    public static List<ObjectModel> loadDdfFile(InputStream input, String streamName) {
         DDFFileParser ddfFileParser = new DDFFileParser();
         return ddfFileParser.parse(input, streamName);
     }
 
     /**
-     * Load object definitions from JSON stream.
+     * Load object definition from DDF resources following rules of {@link Class#getResourceAsStream(String)}.
      * 
-     * @param input An inputStream to a JSON stream.
+     * It should be used to load DDF embedded with your application bundle (e.g. jar, war, ...)
+     * 
+     * @param path directory path to the DDF files
+     * @param filenames names of all the DDF files
      */
-    public static List<ObjectModel> loadJsonStream(InputStream input) {
+    public static List<ObjectModel> loadDdfResources(String path, String[] filenames) {
         List<ObjectModel> models = new ArrayList<>();
-        Reader reader = new InputStreamReader(input);
-        ObjectModel[] objectModels = GSON.fromJson(reader, ObjectModel[].class);
-        for (ObjectModel objectModel : objectModels) {
-            models.add(objectModel);
+        for (String filename : filenames) {
+            String fullpath = StringUtils.removeEnd(path, "/") + "/" + StringUtils.removeStart(filename, "/");
+            InputStream input = ObjectLoader.class.getResourceAsStream(fullpath);
+            if (input != null) {
+                try (Reader reader = new InputStreamReader(input)) {
+                    models.addAll(loadDdfFile(input, fullpath));
+                } catch (IOException e) {
+                    throw new IllegalStateException(String.format("Unable to load model %s", fullpath), e);
+                }
+            } else {
+                throw new IllegalStateException(String.format("Unable to load model %s", fullpath));
+            }
+        }
+        return models;
+    }
+
+    /**
+     * Load object definition from DDF resources following rules of {@link Class#getResourceAsStream(String)}.
+     * 
+     * It should be used to load DDF embedded with your application bundle (e.g. jar, war, ...)
+     * 
+     * @param paths An array of paths to DDF files.
+     */
+    public static List<ObjectModel> loadDdfResources(String[] paths) {
+        List<ObjectModel> models = new ArrayList<>();
+        for (String path : paths) {
+            InputStream input = ObjectLoader.class.getResourceAsStream(path);
+            if (input != null) {
+                try (Reader reader = new InputStreamReader(input)) {
+                    models.addAll(loadDdfFile(input, path));
+                } catch (IOException e) {
+                    throw new IllegalStateException(String.format("Unable to load model %s", path), e);
+                }
+            } else {
+                throw new IllegalStateException(String.format("Unable to load model %s", path));
+            }
         }
         return models;
     }
@@ -110,7 +124,7 @@ public class ObjectLoader {
     /*
      * Load object definitions from files
      */
-    private static List<ObjectModel> loadObjectsFromDir(File modelsDir) {
+    public static List<ObjectModel> loadObjectsFromDir(File modelsDir) {
         List<ObjectModel> models = new ArrayList<>();
 
         // check if the folder is usable
@@ -128,24 +142,12 @@ public class ObjectLoader {
                     // from DDF file
                     LOG.debug("Loading object models from DDF file {}", file.getAbsolutePath());
                     try (FileInputStream input = new FileInputStream(file)) {
-                        ObjectModel objectModel = loadDdfFile(input, file.getName());
-                        if (objectModel != null) {
-                            models.add(objectModel);
-                        }
+                        models.addAll(loadDdfFile(input, file.getName()));
                     } catch (IOException e) {
                         LOG.warn(MessageFormat.format("Unable to load object models for {0}", file.getAbsolutePath()),
                                 e);
                     }
 
-                } else if (file.getName().endsWith(".json")) {
-                    // from JSON file
-                    LOG.debug("Loading object models from JSON file {}", file.getAbsolutePath());
-                    try (FileInputStream input = new FileInputStream(file)) {
-                        models.addAll(loadJsonStream(input));
-                    } catch (IOException e) {
-                        LOG.warn(MessageFormat.format("Unable to load object models for {0}", file.getAbsolutePath()),
-                                e);
-                    }
                 }
             }
         }

@@ -2,11 +2,11 @@
  * Copyright (c) 2013-2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -16,7 +16,10 @@
 package org.eclipse.leshan.server.demo.servlet;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -25,32 +28,41 @@ import javax.servlet.http.HttpServletResponse;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
+import org.eclipse.leshan.core.attributes.AttributeSet;
 import org.eclipse.leshan.core.node.LwM2mNode;
 import org.eclipse.leshan.core.node.LwM2mObjectInstance;
 import org.eclipse.leshan.core.node.LwM2mSingleResource;
+import org.eclipse.leshan.core.node.codec.CodecException;
 import org.eclipse.leshan.core.request.ContentFormat;
 import org.eclipse.leshan.core.request.CreateRequest;
 import org.eclipse.leshan.core.request.DeleteRequest;
+import org.eclipse.leshan.core.request.DiscoverRequest;
 import org.eclipse.leshan.core.request.ExecuteRequest;
 import org.eclipse.leshan.core.request.ObserveRequest;
 import org.eclipse.leshan.core.request.ReadRequest;
+import org.eclipse.leshan.core.request.WriteAttributesRequest;
 import org.eclipse.leshan.core.request.WriteRequest;
 import org.eclipse.leshan.core.request.WriteRequest.Mode;
-import org.eclipse.leshan.core.request.exception.RequestFailedException;
-import org.eclipse.leshan.core.request.exception.ResourceAccessException;
+import org.eclipse.leshan.core.request.exception.ClientSleepingException;
+import org.eclipse.leshan.core.request.exception.InvalidRequestException;
+import org.eclipse.leshan.core.request.exception.InvalidResponseException;
+import org.eclipse.leshan.core.request.exception.RequestCanceledException;
+import org.eclipse.leshan.core.request.exception.RequestRejectedException;
 import org.eclipse.leshan.core.response.CreateResponse;
 import org.eclipse.leshan.core.response.DeleteResponse;
+import org.eclipse.leshan.core.response.DiscoverResponse;
 import org.eclipse.leshan.core.response.ExecuteResponse;
 import org.eclipse.leshan.core.response.LwM2mResponse;
 import org.eclipse.leshan.core.response.ObserveResponse;
 import org.eclipse.leshan.core.response.ReadResponse;
+import org.eclipse.leshan.core.response.WriteAttributesResponse;
 import org.eclipse.leshan.core.response.WriteResponse;
-import org.eclipse.leshan.server.LwM2mServer;
-import org.eclipse.leshan.server.client.Client;
-import org.eclipse.leshan.server.demo.servlet.json.ClientSerializer;
+import org.eclipse.leshan.server.californium.LeshanServer;
 import org.eclipse.leshan.server.demo.servlet.json.LwM2mNodeDeserializer;
 import org.eclipse.leshan.server.demo.servlet.json.LwM2mNodeSerializer;
+import org.eclipse.leshan.server.demo.servlet.json.RegistrationSerializer;
 import org.eclipse.leshan.server.demo.servlet.json.ResponseSerializer;
+import org.eclipse.leshan.server.registration.Registration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,22 +76,25 @@ import com.google.gson.JsonSyntaxException;
 public class ClientServlet extends HttpServlet {
 
     private static final String FORMAT_PARAM = "format";
+    private static final String TIMEOUT_PARAM = "timeout";
+    private static final String REPLACE_PARAM = "replace";
 
     private static final Logger LOG = LoggerFactory.getLogger(ClientServlet.class);
 
-    private static final long TIMEOUT = 5000; // ms
+    private static final long DEFAULT_TIMEOUT = 5000; // ms
 
     private static final long serialVersionUID = 1L;
 
-    private final LwM2mServer server;
+    private final LeshanServer server;
 
     private final Gson gson;
 
-    public ClientServlet(LwM2mServer server, int securePort) {
+    public ClientServlet(LeshanServer server) {
         this.server = server;
 
         GsonBuilder gsonBuilder = new GsonBuilder();
-        gsonBuilder.registerTypeHierarchyAdapter(Client.class, new ClientSerializer(securePort));
+        gsonBuilder.registerTypeHierarchyAdapter(Registration.class,
+                new RegistrationSerializer(server.getPresenceService()));
         gsonBuilder.registerTypeHierarchyAdapter(LwM2mResponse.class, new ResponseSerializer());
         gsonBuilder.registerTypeHierarchyAdapter(LwM2mNode.class, new LwM2mNodeSerializer());
         gsonBuilder.registerTypeHierarchyAdapter(LwM2mNode.class, new LwM2mNodeDeserializer());
@@ -95,11 +110,15 @@ public class ClientServlet extends HttpServlet {
 
         // all registered clients
         if (req.getPathInfo() == null) {
-            Collection<Client> clients = server.getClientRegistry().allClients();
+            Collection<Registration> registrations = new ArrayList<>();
+            for (Iterator<Registration> iterator = server.getRegistrationService().getAllRegistrations(); iterator
+                    .hasNext();) {
+                registrations.add(iterator.next());
+            }
 
-            String json = this.gson.toJson(clients.toArray(new Client[] {}));
+            String json = this.gson.toJson(registrations.toArray(new Registration[] {}));
             resp.setContentType("application/json");
-            resp.getOutputStream().write(json.getBytes("UTF-8"));
+            resp.getOutputStream().write(json.getBytes(StandardCharsets.UTF_8));
             resp.setStatus(HttpServletResponse.SC_OK);
             return;
         }
@@ -113,10 +132,10 @@ public class ClientServlet extends HttpServlet {
 
         // /endPoint : get client
         if (path.length == 1) {
-            Client client = server.getClientRegistry().get(clientEndpoint);
-            if (client != null) {
+            Registration registration = server.getRegistrationService().getByEndpoint(clientEndpoint);
+            if (registration != null) {
                 resp.setContentType("application/json");
-                resp.getOutputStream().write(this.gson.toJson(client).getBytes("UTF-8"));
+                resp.getOutputStream().write(this.gson.toJson(registration).getBytes(StandardCharsets.UTF_8));
                 resp.setStatus(HttpServletResponse.SC_OK);
             } else {
                 resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
@@ -125,36 +144,76 @@ public class ClientServlet extends HttpServlet {
             return;
         }
 
+        // /clients/endPoint/LWRequest/discover : do LightWeight M2M discover request on a given client.
+        if (path.length >= 3 && "discover".equals(path[path.length - 1])) {
+            String target = StringUtils.substringBetween(req.getPathInfo(), clientEndpoint, "/discover");
+            try {
+                Registration registration = server.getRegistrationService().getByEndpoint(clientEndpoint);
+                if (registration != null) {
+                    // create & process request
+                    DiscoverRequest request = new DiscoverRequest(target);
+                    DiscoverResponse cResponse = server.send(registration, request, extractTimeout(req));
+                    processDeviceResponse(req, resp, cResponse);
+                } else {
+                    resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                    resp.getWriter().format("No registered client with id '%s'", clientEndpoint).flush();
+                }
+            } catch (RuntimeException | InterruptedException e) {
+                handleException(e, resp);
+            }
+            return;
+        }
+
         // /clients/endPoint/LWRequest : do LightWeight M2M read request on a given client.
         try {
             String target = StringUtils.removeStart(req.getPathInfo(), "/" + clientEndpoint);
-            Client client = server.getClientRegistry().get(clientEndpoint);
-            if (client != null) {
+            Registration registration = server.getRegistrationService().getByEndpoint(clientEndpoint);
+            if (registration != null) {
                 // get content format
                 String contentFormatParam = req.getParameter(FORMAT_PARAM);
                 ContentFormat contentFormat = contentFormatParam != null
-                        ? ContentFormat.fromName(contentFormatParam.toUpperCase()) : null;
+                        ? ContentFormat.fromName(contentFormatParam.toUpperCase())
+                        : null;
 
                 // create & process request
                 ReadRequest request = new ReadRequest(contentFormat, target);
-                ReadResponse cResponse = server.send(client, request, TIMEOUT);
+                ReadResponse cResponse = server.send(registration, request, extractTimeout(req));
                 processDeviceResponse(req, resp, cResponse);
             } else {
                 resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
                 resp.getWriter().format("No registered client with id '%s'", clientEndpoint).flush();
             }
-        } catch (IllegalArgumentException e) {
-            LOG.warn("Invalid request or response", e);
+        } catch (RuntimeException | InterruptedException e) {
+            handleException(e, resp);
+        }
+    }
+
+    private void handleException(Exception e, HttpServletResponse resp) throws IOException {
+        if (e instanceof InvalidRequestException || e instanceof CodecException
+                || e instanceof ClientSleepingException) {
+            LOG.warn("Invalid request", e);
             resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            resp.getWriter().append(e.getMessage()).flush();
-        } catch (ResourceAccessException | RequestFailedException e) {
-            LOG.warn(String.format("Error accessing resource %s%s.", req.getServletPath(), req.getPathInfo()), e);
+            resp.getWriter().append("Invalid request:").append(e.getMessage()).flush();
+        } else if (e instanceof RequestRejectedException) {
+            LOG.warn("Request rejected", e);
             resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            resp.getWriter().append(e.getMessage()).flush();
-        } catch (InterruptedException e) {
+            resp.getWriter().append("Request rejected:").append(e.getMessage()).flush();
+        } else if (e instanceof RequestCanceledException) {
+            LOG.warn("Request cancelled", e);
+            resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            resp.getWriter().append("Request cancelled:").append(e.getMessage()).flush();
+        } else if (e instanceof InvalidResponseException) {
+            LOG.warn("Invalid response", e);
+            resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            resp.getWriter().append("Invalid Response:").append(e.getMessage()).flush();
+        } else if (e instanceof InterruptedException) {
             LOG.warn("Thread Interrupted", e);
             resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            resp.getWriter().append(e.getMessage()).flush();
+            resp.getWriter().append("Thread Interrupted:").append(e.getMessage()).flush();
+        } else {
+            LOG.warn("Unexpected exception", e);
+            resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            resp.getWriter().append("Unexpected exception:").append(e.getMessage()).flush();
         }
     }
 
@@ -174,34 +233,41 @@ public class ClientServlet extends HttpServlet {
 
         try {
             String target = StringUtils.removeStart(req.getPathInfo(), "/" + clientEndpoint);
-            Client client = server.getClientRegistry().get(clientEndpoint);
-            if (client != null) {
-                // get content format
-                String contentFormatParam = req.getParameter(FORMAT_PARAM);
-                ContentFormat contentFormat = contentFormatParam != null
-                        ? ContentFormat.fromName(contentFormatParam.toUpperCase()) : null;
+            Registration registration = server.getRegistrationService().getByEndpoint(clientEndpoint);
+            if (registration != null) {
+                if (path.length >= 3 && "attributes".equals(path[path.length - 1])) {
+                    // create & process request WriteAttributes request
+                    target = StringUtils.removeEnd(target, path[path.length - 1]);
+                    AttributeSet attributes = AttributeSet.parse(req.getQueryString());
+                    WriteAttributesRequest request = new WriteAttributesRequest(target, attributes);
+                    WriteAttributesResponse cResponse = server.send(registration, request, extractTimeout(req));
+                    processDeviceResponse(req, resp, cResponse);
+                } else {
+                    // get content format
+                    String contentFormatParam = req.getParameter(FORMAT_PARAM);
+                    ContentFormat contentFormat = contentFormatParam != null
+                            ? ContentFormat.fromName(contentFormatParam.toUpperCase())
+                            : null;
 
-                // create & process request
-                LwM2mNode node = extractLwM2mNode(target, req);
-                WriteRequest request = new WriteRequest(Mode.REPLACE, contentFormat, target, node);
-                WriteResponse cResponse = server.send(client, request, TIMEOUT);
-                processDeviceResponse(req, resp, cResponse);
+                    // get replace parameter
+                    String replaceParam = req.getParameter(REPLACE_PARAM);
+                    boolean replace = true;
+                    if (replaceParam != null)
+                        replace = Boolean.valueOf(replaceParam);
+
+                    // create & process request
+                    LwM2mNode node = extractLwM2mNode(target, req);
+                    WriteRequest request = new WriteRequest(replace ? Mode.REPLACE : Mode.UPDATE, contentFormat, target,
+                            node);
+                    WriteResponse cResponse = server.send(registration, request, extractTimeout(req));
+                    processDeviceResponse(req, resp, cResponse);
+                }
             } else {
                 resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
                 resp.getWriter().format("No registered client with id '%s'", clientEndpoint).flush();
             }
-        } catch (IllegalArgumentException e) {
-            LOG.warn("Invalid request or response", e);
-            resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            resp.getWriter().append(e.getMessage()).flush();
-        } catch (ResourceAccessException | RequestFailedException e) {
-            LOG.warn(String.format("Error accessing resource %s%s.", req.getServletPath(), req.getPathInfo()), e);
-            resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            resp.getWriter().append(e.getMessage()).flush();
-        } catch (InterruptedException e) {
-            LOG.warn("Thread Interrupted", e);
-            resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            resp.getWriter().append(e.getMessage()).flush();
+        } catch (RuntimeException | InterruptedException e) {
+            handleException(e, resp);
         }
     }
 
@@ -214,36 +280,27 @@ public class ClientServlet extends HttpServlet {
         String clientEndpoint = path[0];
 
         // /clients/endPoint/LWRequest/observe : do LightWeight M2M observe request on a given client.
-        if (path.length >= 4 && "observe".equals(path[path.length - 1])) {
+        if (path.length >= 3 && "observe".equals(path[path.length - 1])) {
             try {
                 String target = StringUtils.substringBetween(req.getPathInfo(), clientEndpoint, "/observe");
-                Client client = server.getClientRegistry().get(clientEndpoint);
-                if (client != null) {
+                Registration registration = server.getRegistrationService().getByEndpoint(clientEndpoint);
+                if (registration != null) {
                     // get content format
                     String contentFormatParam = req.getParameter(FORMAT_PARAM);
                     ContentFormat contentFormat = contentFormatParam != null
-                            ? ContentFormat.fromName(contentFormatParam.toUpperCase()) : null;
+                            ? ContentFormat.fromName(contentFormatParam.toUpperCase())
+                            : null;
 
                     // create & process request
                     ObserveRequest request = new ObserveRequest(contentFormat, target);
-                    ObserveResponse cResponse = server.send(client, request, TIMEOUT);
+                    ObserveResponse cResponse = server.send(registration, request, extractTimeout(req));
                     processDeviceResponse(req, resp, cResponse);
                 } else {
                     resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
                     resp.getWriter().format("no registered client with id '%s'", clientEndpoint).flush();
                 }
-            } catch (IllegalArgumentException e) {
-                LOG.warn("Invalid request or response", e);
-                resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                resp.getWriter().append(e.getMessage()).flush();
-            } catch (ResourceAccessException | RequestFailedException e) {
-                LOG.warn(String.format("Error accessing resource %s%s.", req.getServletPath(), req.getPathInfo()), e);
-                resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                resp.getWriter().append(e.getMessage()).flush();
-            } catch (InterruptedException e) {
-                LOG.warn("Thread Interrupted", e);
-                resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                resp.getWriter().append(e.getMessage()).flush();
+            } catch (RuntimeException | InterruptedException e) {
+                handleException(e, resp);
             }
             return;
         }
@@ -253,27 +310,21 @@ public class ClientServlet extends HttpServlet {
         // /clients/endPoint/LWRequest : do LightWeight M2M execute request on a given client.
         if (path.length == 4) {
             try {
-                Client client = server.getClientRegistry().get(clientEndpoint);
-                if (client != null) {
-                    ExecuteRequest request = new ExecuteRequest(target, IOUtils.toString(req.getInputStream()));
-                    ExecuteResponse cResponse = server.send(client, request, TIMEOUT);
+                Registration registration = server.getRegistrationService().getByEndpoint(clientEndpoint);
+                if (registration != null) {
+                    String params = null;
+                    if (req.getContentLength() > 0) {
+                        params = IOUtils.toString(req.getInputStream(), StandardCharsets.UTF_8);
+                    }
+                    ExecuteRequest request = new ExecuteRequest(target, params);
+                    ExecuteResponse cResponse = server.send(registration, request, extractTimeout(req));
                     processDeviceResponse(req, resp, cResponse);
                 } else {
                     resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
                     resp.getWriter().format("no registered client with id '%s'", clientEndpoint).flush();
                 }
-            } catch (IllegalArgumentException e) {
-                LOG.warn("Invalid request or response", e);
-                resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                resp.getWriter().append(e.getMessage()).flush();
-            } catch (ResourceAccessException | RequestFailedException e) {
-                LOG.warn(String.format("Error accessing resource %s%s.", req.getServletPath(), req.getPathInfo()), e);
-                resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                resp.getWriter().append(e.getMessage()).flush();
-            } catch (InterruptedException e) {
-                LOG.warn("Thread Interrupted", e);
-                resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                resp.getWriter().append(e.getMessage()).flush();
+            } catch (RuntimeException | InterruptedException e) {
+                handleException(e, resp);
             }
             return;
         }
@@ -281,18 +332,26 @@ public class ClientServlet extends HttpServlet {
         // /clients/endPoint/LWRequest : do LightWeight M2M create request on a given client.
         if (2 <= path.length && path.length <= 3) {
             try {
-                Client client = server.getClientRegistry().get(clientEndpoint);
-                if (client != null) {
+                Registration registration = server.getRegistrationService().getByEndpoint(clientEndpoint);
+                if (registration != null) {
                     // get content format
                     String contentFormatParam = req.getParameter(FORMAT_PARAM);
                     ContentFormat contentFormat = contentFormatParam != null
-                            ? ContentFormat.fromName(contentFormatParam.toUpperCase()) : null;
+                            ? ContentFormat.fromName(contentFormatParam.toUpperCase())
+                            : null;
 
                     // create & process request
                     LwM2mNode node = extractLwM2mNode(target, req);
                     if (node instanceof LwM2mObjectInstance) {
-                        CreateRequest request = new CreateRequest(contentFormat, target, (LwM2mObjectInstance) node);
-                        CreateResponse cResponse = server.send(client, request, TIMEOUT);
+                        CreateRequest request;
+                        if (node.getId() == LwM2mObjectInstance.UNDEFINED) {
+                            request = new CreateRequest(contentFormat, target,
+                                    ((LwM2mObjectInstance) node).getResources().values());
+                        } else {
+                            request = new CreateRequest(contentFormat, target, (LwM2mObjectInstance) node);
+                        }
+
+                        CreateResponse cResponse = server.send(registration, request, extractTimeout(req));
                         processDeviceResponse(req, resp, cResponse);
                     } else {
                         throw new IllegalArgumentException("payload must contain an object instance");
@@ -301,18 +360,8 @@ public class ClientServlet extends HttpServlet {
                     resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
                     resp.getWriter().format("no registered client with id '%s'", clientEndpoint).flush();
                 }
-            } catch (IllegalArgumentException e) {
-                LOG.warn("Invalid request or response", e);
-                resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                resp.getWriter().append(e.getMessage()).flush();
-            } catch (ResourceAccessException | RequestFailedException e) {
-                LOG.warn(String.format("Error accessing resource %s%s.", req.getServletPath(), req.getPathInfo()), e);
-                resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                resp.getWriter().append(e.getMessage()).flush();
-            } catch (InterruptedException e) {
-                LOG.warn("Thread Interrupted", e);
-                resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                resp.getWriter().append(e.getMessage()).flush();
+            } catch (RuntimeException | InterruptedException e) {
+                handleException(e, resp);
             }
             return;
         }
@@ -324,25 +373,19 @@ public class ClientServlet extends HttpServlet {
         String clientEndpoint = path[0];
 
         // /clients/endPoint/LWRequest/observe : cancel observation for the given resource.
-        if (path.length >= 4 && "observe".equals(path[path.length - 1])) {
+        if (path.length >= 3 && "observe".equals(path[path.length - 1])) {
             try {
                 String target = StringUtils.substringsBetween(req.getPathInfo(), clientEndpoint, "/observe")[0];
-                Client client = server.getClientRegistry().get(clientEndpoint);
-                if (client != null) {
-                    server.getObservationRegistry().cancelObservations(client, target);
+                Registration registration = server.getRegistrationService().getByEndpoint(clientEndpoint);
+                if (registration != null) {
+                    server.getObservationService().cancelObservations(registration, target);
                     resp.setStatus(HttpServletResponse.SC_OK);
                 } else {
                     resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
                     resp.getWriter().format("no registered client with id '%s'", clientEndpoint).flush();
                 }
-            } catch (IllegalArgumentException e) {
-                LOG.warn("Invalid request or response", e);
-                resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                resp.getWriter().append(e.getMessage()).flush();
-            } catch (ResourceAccessException | RequestFailedException e) {
-                LOG.warn(String.format("Error accessing resource %s%s.", req.getServletPath(), req.getPathInfo()), e);
-                resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                resp.getWriter().append(e.getMessage()).flush();
+            } catch (RuntimeException e) {
+                handleException(e, resp);
             }
             return;
         }
@@ -350,39 +393,28 @@ public class ClientServlet extends HttpServlet {
         // /clients/endPoint/LWRequest/ : delete instance
         try {
             String target = StringUtils.removeStart(req.getPathInfo(), "/" + clientEndpoint);
-            Client client = server.getClientRegistry().get(clientEndpoint);
-            if (client != null) {
+            Registration registration = server.getRegistrationService().getByEndpoint(clientEndpoint);
+            if (registration != null) {
                 DeleteRequest request = new DeleteRequest(target);
-                DeleteResponse cResponse = server.send(client, request, TIMEOUT);
+                DeleteResponse cResponse = server.send(registration, request, extractTimeout(req));
                 processDeviceResponse(req, resp, cResponse);
             } else {
                 resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
                 resp.getWriter().format("no registered client with id '%s'", clientEndpoint).flush();
             }
-        } catch (IllegalArgumentException e) {
-            LOG.warn("Invalid request or response", e);
-            resp.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            resp.getWriter().append(e.getMessage()).flush();
-        } catch (ResourceAccessException | RequestFailedException e) {
-            LOG.warn(String.format("Error accessing resource %s%s.", req.getServletPath(), req.getPathInfo()), e);
-            resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            resp.getWriter().append(e.getMessage()).flush();
-        } catch (InterruptedException e) {
-            LOG.warn("Interrupted request", e);
-            resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            resp.getWriter().append(e.getMessage()).flush();
+        } catch (RuntimeException | InterruptedException e) {
+            handleException(e, resp);
         }
     }
 
     private void processDeviceResponse(HttpServletRequest req, HttpServletResponse resp, LwM2mResponse cResponse)
             throws IOException {
-        String response = null;
         if (cResponse == null) {
             LOG.warn(String.format("Request %s%s timed out.", req.getServletPath(), req.getPathInfo()));
-            resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            resp.setStatus(HttpServletResponse.SC_GATEWAY_TIMEOUT);
             resp.getWriter().append("Request timeout").flush();
         } else {
-            response = this.gson.toJson(cResponse);
+            String response = this.gson.toJson(cResponse);
             resp.setContentType("application/json");
             resp.getOutputStream().write(response.getBytes());
             resp.setStatus(HttpServletResponse.SC_OK);
@@ -397,7 +429,7 @@ public class ClientServlet extends HttpServlet {
             try {
                 node = gson.fromJson(content, LwM2mNode.class);
             } catch (JsonSyntaxException e) {
-                throw new IllegalArgumentException("unable to parse json to tlv:" + e.getMessage(), e);
+                throw new InvalidRequestException(e, "unable to parse json to tlv:%s", e.getMessage());
             }
             return node;
         } else if ("text/plain".equals(contentType)) {
@@ -405,6 +437,22 @@ public class ClientServlet extends HttpServlet {
             int rscId = Integer.valueOf(target.substring(target.lastIndexOf("/") + 1));
             return LwM2mSingleResource.newStringResource(rscId, content);
         }
-        throw new IllegalArgumentException("content type " + req.getContentType() + " not supported");
+        throw new InvalidRequestException("content type %s not supported", req.getContentType());
+    }
+
+    private long extractTimeout(HttpServletRequest req) {
+        // get content format
+        String timeoutParam = req.getParameter(TIMEOUT_PARAM);
+        long timeout;
+        if (timeoutParam != null) {
+            try {
+                timeout = Long.parseLong(timeoutParam) * 1000;
+            } catch (NumberFormatException e) {
+                timeout = DEFAULT_TIMEOUT;
+            }
+        } else {
+            timeout = DEFAULT_TIMEOUT;
+        }
+        return timeout;
     }
 }

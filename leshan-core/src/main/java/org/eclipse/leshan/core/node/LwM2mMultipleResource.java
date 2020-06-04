@@ -2,11 +2,11 @@
  * Copyright (c) 2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -27,7 +27,6 @@ import java.util.NoSuchElementException;
 import java.util.Objects;
 
 import org.eclipse.leshan.core.model.ResourceModel.Type;
-import org.eclipse.leshan.util.Validate;
 
 /**
  * A resource which contains several resource instances.
@@ -38,77 +37,84 @@ public class LwM2mMultipleResource implements LwM2mResource {
 
     private final int id;
 
-    private final Map<Integer, ?> values;
+    private final Map<Integer, Object> values;
 
     private final Type type;
 
     protected LwM2mMultipleResource(int id, Map<Integer, ?> values, Type type) {
+        LwM2mNodeUtil.validateNotNull(values, "values MUST NOT be null");
+        LwM2mNodeUtil.validateResourceId(id);
+
+        for (Integer instanceId : values.keySet()) {
+            LwM2mNodeUtil.validateResourceInstanceId(instanceId);
+        }
         this.id = id;
-        this.values = Collections.unmodifiableMap(new HashMap<Integer, Object>(values));
+        this.values = Collections.unmodifiableMap(new HashMap<>(values));
         this.type = type;
     }
 
     public static LwM2mMultipleResource newResource(int id, Map<Integer, ?> values, Type type) {
+        LwM2mNodeUtil.validateNotNull(values, "values MUST NOT be null");
         switch (type) {
         case INTEGER:
-            Validate.allElementsOfType(values.values(), Long.class);
+            LwM2mNodeUtil.allElementsOfType(values.values(), Long.class);
             break;
         case FLOAT:
-            Validate.allElementsOfType(values.values(), Double.class);
+            LwM2mNodeUtil.allElementsOfType(values.values(), Double.class);
             break;
         case BOOLEAN:
-            Validate.allElementsOfType(values.values(), Boolean.class);
+            LwM2mNodeUtil.allElementsOfType(values.values(), Boolean.class);
             break;
         case OPAQUE:
-            Validate.allElementsOfType(values.values(), byte[].class);
+            LwM2mNodeUtil.allElementsOfType(values.values(), byte[].class);
             break;
         case STRING:
-            Validate.allElementsOfType(values.values(), String.class);
+            LwM2mNodeUtil.allElementsOfType(values.values(), String.class);
             break;
         case TIME:
-            Validate.allElementsOfType(values.values(), Date.class);
+            LwM2mNodeUtil.allElementsOfType(values.values(), Date.class);
             break;
         case OBJLNK:
-            Validate.allElementsOfType(values.values(), ObjectLink.class);
+            LwM2mNodeUtil.allElementsOfType(values.values(), ObjectLink.class);
             break;
         default:
-            throw new IllegalArgumentException(String.format("Type %s is not supported", type.name()));
+            throw new LwM2mNodeException(String.format("Type %s is not supported", type.name()));
         }
         return new LwM2mMultipleResource(id, values, type);
     }
 
     public static LwM2mMultipleResource newStringResource(int id, Map<Integer, String> values) {
-        Validate.noNullElements(values.values());
+        LwM2mNodeUtil.noNullElements(values.values());
         return new LwM2mMultipleResource(id, values, Type.STRING);
     }
 
     public static LwM2mMultipleResource newIntegerResource(int id, Map<Integer, Long> values) {
-        Validate.noNullElements(values.values());
+        LwM2mNodeUtil.noNullElements(values.values());
         return new LwM2mMultipleResource(id, values, Type.INTEGER);
     }
 
     public static LwM2mMultipleResource newBooleanResource(int id, Map<Integer, Boolean> values) {
-        Validate.noNullElements(values.values());
+        LwM2mNodeUtil.noNullElements(values.values());
         return new LwM2mMultipleResource(id, values, Type.BOOLEAN);
     }
 
     public static LwM2mMultipleResource newFloatResource(int id, Map<Integer, Double> values) {
-        Validate.noNullElements(values.values());
+        LwM2mNodeUtil.noNullElements(values.values());
         return new LwM2mMultipleResource(id, values, Type.FLOAT);
     }
 
     public static LwM2mMultipleResource newDateResource(int id, Map<Integer, Date> values) {
-        Validate.noNullElements(values.values());
+        LwM2mNodeUtil.noNullElements(values.values());
         return new LwM2mMultipleResource(id, values, Type.TIME);
     }
 
     public static LwM2mMultipleResource newObjectLinkResource(int id, Map<Integer, ObjectLink> values) {
-        Validate.noNullElements(values.values());
+        LwM2mNodeUtil.noNullElements(values.values());
         return new LwM2mMultipleResource(id, values, Type.OBJLNK);
     }
 
     public static LwM2mMultipleResource newBinaryResource(int id, Map<Integer, byte[]> values) {
-        Validate.noNullElements(values.values());
+        LwM2mNodeUtil.noNullElements(values.values());
         return new LwM2mMultipleResource(id, values, Type.OPAQUE);
     }
 
@@ -129,7 +135,7 @@ public class LwM2mMultipleResource implements LwM2mResource {
     }
 
     /**
-     * @exception raise a {@link NoSuchElementException}
+     * @exception NoSuchElementException use {@link #getValue(int)} or {@link #getValue(int)} instead.
      */
     @Override
     public Object getValue() {
@@ -232,9 +238,8 @@ public class LwM2mMultipleResource implements LwM2mResource {
             return false;
 
         try {
-            Iterator<?> i = m1.entrySet().iterator();
-            while (i.hasNext()) {
-                Entry<?, ?> e = (Entry<?, ?>) i.next();
+            for (Object o : m1.entrySet()) {
+                Entry<?, ?> e = (Entry<?, ?>) o;
                 Object key = e.getKey();
                 Object value = e.getValue();
                 if (value == null) {
@@ -242,13 +247,11 @@ public class LwM2mMultipleResource implements LwM2mResource {
                         return false;
                 } else {
                     // Custom equals to handle byte arrays
-                    return type == Type.OPAQUE ? Arrays.equals((byte[]) value, (byte[]) m2.get(key)) : value.equals(m2
-                            .get(key));
+                    return type == Type.OPAQUE ? Arrays.equals((byte[]) value, (byte[]) m2.get(key))
+                            : value.equals(m2.get(key));
                 }
             }
-        } catch (ClassCastException unused) {
-            return false;
-        } catch (NullPointerException unused) {
+        } catch (ClassCastException | NullPointerException unused) {
             return false;
         }
 
@@ -257,7 +260,28 @@ public class LwM2mMultipleResource implements LwM2mResource {
 
     @Override
     public String toString() {
-        return String.format("LwM2mMultipleResource [id=%s, values=%s, type=%s]", id, values, type);
+        Object printableValue;
+        if (type == Type.OPAQUE) {
+            // We don't print OPAQUE value as this could be credentials one.
+            // Not ideal but didn't find better way for now.
+            StringBuilder sb = new StringBuilder();
+            sb.append("{");
+            Iterator<Entry<Integer, Object>> iter = values.entrySet().iterator();
+            while (iter.hasNext()) {
+                Entry<Integer, Object> entry = iter.next();
+                sb.append(entry.getKey());
+                sb.append("=");
+                sb.append(((byte[]) entry.getValue()).length + "Bytes");
+                if (iter.hasNext()) {
+                    sb.append(", ");
+                }
+            }
+            sb.append("}");
+            printableValue = sb.toString();
+        } else {
+            printableValue = values;
+        }
+        return String.format("LwM2mMultipleResource [id=%s, values=%s, type=%s]", id, printableValue, type);
     }
 
 }

@@ -11,49 +11,35 @@
                         <div class={ form-group:true, has-error: endpoint.error } >
                             <label for="endpoint" class="col-sm-4 control-label">Client endpoint</label>
                             <div class="col-sm-8">
-                                <input class="form-control" id="endpoint" oninput={validate_endpoint} onblur={validate_endpoint} >
+                                <input class="form-control" id="endpoint" ref="endpoint" oninput={validate_endpoint} onblur={validate_endpoint} >
                                 <p class="help-block">The endpoint is required</p>
                             </div>
                         </div>
 
-                        <div class="form-group" >
-                            <label for="dmUrl" class="col-sm-4 control-label">LWM2M Server URL</label>
-                            <div class="col-sm-8">
-                                <input class="form-control" id="dmUrl" placeholder={default_uri()}>
-                            </div>
+                        <ul class="nav nav-tabs nav-justified">
+                            <li role="presentation" class={ active:activetab.lwserver }><a href="javascript:void(0);" onclick={activetab.activelwserver}>LWM2M Server</a></li>
+                            <li role="presentation" class={ active:activetab.bsserver }><a href="javascript:void(0);" onclick={activetab.activebsserver}>LWM2M Bootstrap Server</a></li>
+                        </ul>
+                        </br>
+
+                        <div>
+                            <securityconfig-input   ref="lwserver" onchange={update} show={activetab.lwserver}
+                                                    securi={ "coaps://" + location.hostname + ":5684" }
+                                                    unsecuri= { "coap://" + location.hostname + ":5683" }
+                                                    secmode = { {no_sec:true, psk:true, rpk:true, x509:true} }
+                                                    ></securityconfig-input>
+                        </div>
+                        <div>
+                             <securityconfig-input ref="bsserver" onchange={update} show={activetab.bsserver}
+                                                    securi={ "coaps://" + location.hostname + ":" + serverdata.securedEndpointPort }
+                                                    unsecuri= { "coap://" + location.hostname + ":" + serverdata.unsecuredEndpointPort }
+                                                    serverpubkey= {serversecurity.rpk.hexDer}
+                                                    servercertificate= {serversecurity.certificate.hexDer}
+                                                    disable = { {uri:true, serverpubkey:true, servercertificate:true}}
+                                                    secmode = { {no_sec:true, psk:true,rpk:true, x509:true}}
+                                                    ></securityconfig-input>
                         </div>
 
-                        <div class="form-group">
-                            <label for="secMode" class="col-sm-4 control-label">Security mode</label>
-                            <div class="col-sm-8">
-                                <select class="form-control" id="secMode" onchange={update}>
-                                    <option value="no_sec">No Security</option>
-                                    <option value="psk">Pre-Shared Key</option>
-                                    <!-- option value="rpk">Raw Public Key (Elliptic Curves)</option-->
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- PSK inputs -->
-                        <div class={ form-group:true, has-error: pskId.error } if={ secMode.value == "psk"}>
-                            <label for="pskId" class="col-sm-4 control-label">Identity</label>
-                            <div class="col-sm-8">
-                                <textarea class="form-control" style="resize:none" rows="3" id="pskId" oninput={validate_pskId} onblur={validate_pskId}></textarea>
-                                <p class="help-block" if={pskId.required} >The PSK identity is required</p>
-                                <p class="help-block" if={pskId.toolong} >The PSK identity is too long</p>
-                            </div>
-                        </div>
-
-                        <div class={ form-group:true, has-error: pskVal.error } if={ secMode.value == "psk"}>
-                            <label for="pskVal" class="col-sm-4 control-label">Key</label>
-                            <div class="col-sm-8">
-                                <textarea class="form-control" style="resize:none" rows="3" id="pskVal" oninput={validate_pskVal} onblur={validate_pskVal}></textarea>
-                                <p class="text-right text-muted small" style="margin:0">Hexadecimal format</p>
-                                <p class="help-block" if={pskVal.required}>The pre-shared key is required</p>
-                                <p class="help-block" if={pskVal.nothexa}>Hexadecimal format is expected</p>
-                                <p class="help-block" if={pskVal.toolong}>The pre-shared key is too long</p>
-                            </div>
-                        </div>
                     </form>
                 </div>
                 <div class="modal-footer">
@@ -65,138 +51,86 @@
     </div>
 
     <script>
-        var self = this;
-        this.on('mount', function() {
-            $('#bootstrap-modal').modal('show');
-            this.update();
+        // Tag definition
+        var tag = this;
+        // Tag Params
+        tag.serverdata = opts.server || {unsecuredEndpointPort:5683, securedEndpointPort:5684};
+        tag.serversecurity = opts.security || {rpk:{},certificate:{}};
+        // Tag Internal state
+        tag.endpoint = {};
+        tag.has_error = has_error;
+        tag.validate_endpoint = validate_endpoint;
+        tag.submit = submit;
+
+        // Tabs management
+        tag.activetab = {
+                lwserver:true,
+                bsserver:false,
+                activelwserver:function(){ tag.activetab.lwserver=true; tag.activetab.bsserver = false; },
+                activebsserver:function(){ tag.activetab.lwserver=false; tag.activetab.bsserver = true; }
+        };
+
+        // Initialization
+        tag.on('mount', function() {
+                $('#bootstrap-modal').modal('show');
         });
 
-        default_uri(){
-            if (secMode.value === "no_sec")
-                return "coap://leshan.eclipse.org:5683";
-            else
-                return "coaps://leshan.eclipse.org:5684";
+        // Tag functions
+        function has_error(){
+            var endpoint_has_error = (tag.endpoint.error === undefined || tag.endpoint.error);
+            return endpoint_has_error || tag.refs.lwserver.has_error() || tag.refs.bsserver.has_error();
         }
 
-        has_error(){
-            var endpoint_has_error = (endpoint.error === undefined || endpoint.error);
-            var secMode_has_error = secMode.value === "psk" && (typeof pskId.error === "undefined" || pskId.error || typeof pskVal.error === "undefined" || pskVal.error);
-            return endpoint_has_error || secMode_has_error;
-        }
-
-        validate_endpoint(){
-            var str = endpoint.value;
+        function validate_endpoint(){
+            var str = tag.refs.endpoint.value;
             if (!str || 0 === str.length){
-                endpoint.error = true;
-                has_error = true;
+                tag.endpoint.error = true;
             }else{
-                endpoint.error = false;
-                has_error = false;
+                tag.endpoint.error = false;
             }
         }
 
-        validate_pskId(){
-            var str = pskId.value;
-            pskId.error = false;
-            pskId.required = false;
-            pskId.toolong = false;
-            if (secMode.value === "psk"){
-                if (!str || 0 === str.length){
-                    pskId.error = true;
-                    pskId.required = true;
-                }else if (str.length > 128){
-                    pskId.error = true;
-                    pskId.toolong = true;
-                }
-            }
-        }
+        function submit(){
+            var lwserver = tag.refs.lwserver.get_value()
+            var bsserver = tag.refs.bsserver.get_value()
 
-        validate_pskVal(){
-            var str = pskVal.value;
-            pskVal.error = false;
-            pskVal.required = false;
-            pskVal.toolong = false;
-            pskVal.nothexa = false;
-            if (secMode.value === "psk"){
-                if (!str || 0 === str.length){
-                    pskVal.error = true;
-                    pskVal.required = true;
-                }else if (str.length > 128){
-                    pskVal.error = true;
-                    pskVal.toolong = true;
-                }else if (! /^[0-9a-fA-F]+$/i.test(str)){
-                    pskVal.error = true;
-                    pskVal.nothexa = true;
-                }
-            }
-        }
-
-        fromAscii(ascii){
-            var bytearray = [];
-            for (var i in ascii){
-                bytearray[i] = ascii.charCodeAt(i);
-            }
-            return bytearray;
-        };
-
-        fromHex(hex){
-            var bytes = [];
-            for(var i=0; i< hex.length-1; i+=2) {
-                bytes.push(parseInt(hex.substr(i, 2), 16));
-            }
-            return bytes;
-        };
-
-        submit(){
-            var id = [];
-            var key = [];
-            if (secMode.value === "psk"){
-                id = self.fromAscii(pskId.value);
-                key = self.fromHex(pskVal.value);
-                console.log(key)
-            }
-            var uri
-            if (!dmUrl.value || dmUrl.value.length == 0){
-                uri = self.default_uri();
-            }else{
-                uri = dmUrl.value;
-            }
+            // add config to the store
             bsConfigStore.add(endpoint.value, {
                  dm:[{
                     binding : "U",
                     defaultMinPeriod : 1,
-                    lifetime : 20,
+                    lifetime : 300,
                     notifIfDisabled : true,
                     shortId : 123,
                     security : {
                         bootstrapServer : false,
                         clientOldOffTime : 1,
-                        publicKeyOrId : id,
-                        secretKey : key,
-                        securityMode : secMode.value.toUpperCase(),
+                        publicKeyOrId : lwserver.id,
+                        secretKey : lwserver.key,
+                        securityMode : lwserver.secmode,
                         serverId : 123,
-                        serverPublicKeyOrId : [  ],
+                        serverPublicKey : lwserver.serverKey,
                         serverSmsNumber : "",
                         smsBindingKeyParam : [  ],
                         smsBindingKeySecret : [  ],
                         smsSecurityMode : "NO_SEC",
-                        uri : uri
+                        uri : lwserver.uri
                       }
                 }],
                  bs:[{
                     security : {
                         bootstrapServer : true,
                         clientOldOffTime : 1,
-                        publicKeyOrId : [],
-                        secretKey : [],
-                        securityMode : "NO_SEC",
+                        publicKeyOrId : bsserver.id,
+                        secretKey : bsserver.key,
+                        securityMode : bsserver.secmode,
                         serverId : 111,
-                        serverPublicKeyOrId : [  ],
+                        serverPublicKey : bsserver.serverKey,
                         serverSmsNumber : "",
                         smsBindingKeyParam : [  ],
                         smsBindingKeySecret : [  ],
                         smsSecurityMode : "NO_SEC",
-                        uri : "coap://"+location.hostname+":5683",
+                        uri : bsserver.uri,
                       }
                 }]
             });

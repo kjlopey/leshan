@@ -2,11 +2,11 @@
  * Copyright (c) 2013-2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -16,10 +16,12 @@
 package org.eclipse.leshan.core.request;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.eclipse.leshan.core.node.LwM2mPath;
 import org.eclipse.leshan.core.observation.Observation;
+import org.eclipse.leshan.core.request.exception.InvalidRequestException;
 import org.eclipse.leshan.core.response.ObserveResponse;
 
 /**
@@ -28,10 +30,10 @@ import org.eclipse.leshan.core.response.ObserveResponse;
  */
 public class ObserveRequest extends AbstractDownlinkRequest<ObserveResponse> {
 
-    private ContentFormat format;
+    private final ContentFormat format;
 
     /* Additional information relative to this observe request */
-    private Map<String, String> context;
+    private final Map<String, String> context;
 
     /**
      * Creates a request for observing future changes of all instances of a particular object of a client.
@@ -100,10 +102,10 @@ public class ObserveRequest extends AbstractDownlinkRequest<ObserveResponse> {
      * Creates a request for observing future changes of a particular LWM2M node (object, object instance or resource).
      * 
      * @param path the path to the LWM2M node to observe
-     * @throw IllegalArgumentException if the path is not valid
+     * @exception InvalidRequestException if the path is not valid.
      */
-    public ObserveRequest(String path) {
-        this(null, new LwM2mPath(path), null);
+    public ObserveRequest(String path) throws InvalidRequestException {
+        this(null, newPath(path), null);
     }
 
     /**
@@ -111,10 +113,10 @@ public class ObserveRequest extends AbstractDownlinkRequest<ObserveResponse> {
      * 
      * @param format the desired format for the response
      * @param path the path to the LWM2M node to observe
-     * @throw IllegalArgumentException if the path is not valid
+     * @exception InvalidRequestException if the path is not valid.
      */
-    public ObserveRequest(ContentFormat format, String path) {
-        this(format, new LwM2mPath(path), null);
+    public ObserveRequest(ContentFormat format, String path) throws InvalidRequestException {
+        this(format, newPath(path), null);
     }
 
     /**
@@ -124,22 +126,29 @@ public class ObserveRequest extends AbstractDownlinkRequest<ObserveResponse> {
      * @param path the path to the LWM2M node to observe
      * @param context additional information about the request. This context will be available via the
      *        {@link Observation} once established.
-     * @throw IllegalArgumentException if the path is not valid
+     * @exception InvalidRequestException if the path is not valid.
      */
-    public ObserveRequest(ContentFormat format, String path, Map<String, String> context) {
-        this(format, new LwM2mPath(path), context);
+    public ObserveRequest(ContentFormat format, String path, Map<String, String> context)
+            throws InvalidRequestException {
+        this(format, newPath(path), context);
     }
 
     private ObserveRequest(ContentFormat format, LwM2mPath target, Map<String, String> context) {
         super(target);
+        if (target.isRoot())
+            throw new InvalidRequestException("Observe request cannot target root path");
+
         this.format = format;
-        this.context = context;
+        if (context == null || context.isEmpty())
+            this.context = Collections.emptyMap();
+        else
+            this.context = Collections.unmodifiableMap(new HashMap<>(context));
     }
 
     /**
      * @return the desired format of the resource to read
      */
-    public ContentFormat getFormat() {
+    public ContentFormat getContentFormat() {
         return format;
     }
 
@@ -147,10 +156,7 @@ public class ObserveRequest extends AbstractDownlinkRequest<ObserveResponse> {
      * @return an unmodifiable map containing the additional information relative to this observe request.
      */
     public Map<String, String> getContext() {
-        if (context == null) {
-            return Collections.emptyMap();
-        }
-        return Collections.unmodifiableMap(context);
+        return context;
     }
 
     @Override

@@ -2,11 +2,11 @@
  * Copyright (c) 2013-2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -19,6 +19,7 @@
 package org.eclipse.leshan.integration.tests;
 
 import static org.eclipse.leshan.integration.tests.IntegrationTestHelper.*;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.*;
@@ -28,18 +29,21 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.eclipse.californium.core.coap.Response;
-import org.eclipse.leshan.ResponseCode;
+import org.eclipse.leshan.core.ResponseCode;
 import org.eclipse.leshan.core.model.ResourceModel.Type;
 import org.eclipse.leshan.core.node.LwM2mMultipleResource;
 import org.eclipse.leshan.core.node.LwM2mObjectInstance;
 import org.eclipse.leshan.core.node.LwM2mResource;
 import org.eclipse.leshan.core.node.LwM2mSingleResource;
 import org.eclipse.leshan.core.node.ObjectLink;
+import org.eclipse.leshan.core.node.codec.CodecException;
 import org.eclipse.leshan.core.request.ContentFormat;
 import org.eclipse.leshan.core.request.ReadRequest;
 import org.eclipse.leshan.core.request.WriteRequest;
 import org.eclipse.leshan.core.request.WriteRequest.Mode;
+import org.eclipse.leshan.core.response.ErrorCallback;
 import org.eclipse.leshan.core.response.ReadResponse;
+import org.eclipse.leshan.core.response.ResponseCallback;
 import org.eclipse.leshan.core.response.WriteResponse;
 import org.junit.After;
 import org.junit.Before;
@@ -55,13 +59,13 @@ public class WriteTest {
         helper.server.start();
         helper.createClient();
         helper.client.start();
-        helper.waitForRegistration(1);
+        helper.waitForRegistrationAtServerSide(1);
     }
 
     @After
     public void stop() {
-        helper.client.stop(false);
-        helper.server.stop();
+        helper.client.destroy(false);
+        helper.server.destroy();
         helper.dispose();
     }
 
@@ -76,14 +80,23 @@ public class WriteTest {
     }
 
     @Test
-    // TODO fix json format
+    public void can_write_string_resource_in__old_tlv() throws InterruptedException {
+        write_string_resource(ContentFormat.fromCode(ContentFormat.OLD_TLV_CODE));
+    }
+
+    @Test
     public void can_write_string_resource_in_json() throws InterruptedException {
         write_string_resource(ContentFormat.JSON);
     }
 
+    @Test
+    public void can_write_string_resource_in__old_json() throws InterruptedException {
+        write_string_resource(ContentFormat.fromCode(ContentFormat.OLD_JSON_CODE));
+    }
+
     private void write_string_resource(ContentFormat format) throws InterruptedException {
         // write resource
-        final String expectedvalue = "stringvalue";
+        String expectedvalue = "stringvalue";
         WriteResponse response = helper.server.send(helper.getCurrentRegistration(),
                 new WriteRequest(format, TEST_OBJECT_ID, 0, STRING_RESOURCE_ID, expectedvalue));
 
@@ -110,13 +123,23 @@ public class WriteTest {
     }
 
     @Test
+    public void can_write_boolean_resource_in_old_tlv() throws InterruptedException {
+        write_boolean_resource(ContentFormat.fromCode(ContentFormat.OLD_TLV_CODE));
+    }
+
+    @Test
     public void can_write_boolean_resource_in_json() throws InterruptedException {
         write_boolean_resource(ContentFormat.JSON);
     }
 
+    @Test
+    public void can_write_boolean_resource_in_old_json() throws InterruptedException {
+        write_boolean_resource(ContentFormat.fromCode(ContentFormat.OLD_JSON_CODE));
+    }
+
     private void write_boolean_resource(ContentFormat format) throws InterruptedException {
         // write resource
-        final boolean expectedvalue = true;
+        boolean expectedvalue = true;
         WriteResponse response = helper.server.send(helper.getCurrentRegistration(),
                 new WriteRequest(format, TEST_OBJECT_ID, 0, BOOLEAN_RESOURCE_ID, expectedvalue));
 
@@ -143,13 +166,23 @@ public class WriteTest {
     }
 
     @Test
+    public void can_write_integer_resource_in_old_tlv() throws InterruptedException {
+        write_integer_resource(ContentFormat.fromCode(ContentFormat.OLD_TLV_CODE));
+    }
+
+    @Test
     public void can_write_integer_resource_in_json() throws InterruptedException {
         write_integer_resource(ContentFormat.JSON);
     }
 
+    @Test
+    public void can_write_integer_resource_in_old_json() throws InterruptedException {
+        write_integer_resource(ContentFormat.fromCode(ContentFormat.OLD_JSON_CODE));
+    }
+
     private void write_integer_resource(ContentFormat format) throws InterruptedException {
         // write resource
-        final long expectedvalue = 999l;
+        long expectedvalue = 999l;
         WriteResponse response = helper.server.send(helper.getCurrentRegistration(),
                 new WriteRequest(format, TEST_OBJECT_ID, 0, INTEGER_RESOURCE_ID, expectedvalue));
 
@@ -176,13 +209,23 @@ public class WriteTest {
     }
 
     @Test
+    public void can_write_float_resource_in_old_tlv() throws InterruptedException {
+        write_float_resource(ContentFormat.fromCode(ContentFormat.OLD_TLV_CODE));
+    }
+
+    @Test
     public void can_write_float_resource_in_json() throws InterruptedException {
         write_float_resource(ContentFormat.JSON);
     }
 
+    @Test
+    public void can_write_float_resource_in_old_json() throws InterruptedException {
+        write_float_resource(ContentFormat.fromCode(ContentFormat.OLD_JSON_CODE));
+    }
+
     private void write_float_resource(ContentFormat format) throws InterruptedException {
         // write resource
-        final double expectedvalue = 999.99;
+        double expectedvalue = 999.99;
         WriteResponse response = helper.server.send(helper.getCurrentRegistration(),
                 new WriteRequest(format, TEST_OBJECT_ID, 0, FLOAT_RESOURCE_ID, expectedvalue));
 
@@ -209,13 +252,23 @@ public class WriteTest {
     }
 
     @Test
+    public void can_write_time_resource_in_old_tlv() throws InterruptedException {
+        write_time_resource(ContentFormat.fromCode(ContentFormat.OLD_TLV_CODE));
+    }
+
+    @Test
     public void can_write_time_resource_in_json() throws InterruptedException {
         write_time_resource(ContentFormat.JSON);
     }
 
+    @Test
+    public void can_write_time_resource_in_old_json() throws InterruptedException {
+        write_time_resource(ContentFormat.fromCode(ContentFormat.OLD_JSON_CODE));
+    }
+
     private void write_time_resource(ContentFormat format) throws InterruptedException {
         // write resource
-        final Date expectedvalue = new Date(946681000l); // second accuracy
+        Date expectedvalue = new Date(946681000l); // second accuracy
         WriteResponse response = helper.server.send(helper.getCurrentRegistration(),
                 new WriteRequest(format, TEST_OBJECT_ID, 0, TIME_RESOURCE_ID, expectedvalue));
 
@@ -242,13 +295,23 @@ public class WriteTest {
     }
 
     @Test
+    public void can_write_opaque_resource_in_old_tlv() throws InterruptedException {
+        write_opaque_resource(ContentFormat.fromCode(ContentFormat.OLD_TLV_CODE));
+    }
+
+    @Test
     public void can_write_opaque_resource_in_json() throws InterruptedException {
         write_opaque_resource(ContentFormat.JSON);
     }
 
+    @Test
+    public void can_write_opaque_resource_in_old_json() throws InterruptedException {
+        write_opaque_resource(ContentFormat.fromCode(ContentFormat.OLD_JSON_CODE));
+    }
+
     private void write_opaque_resource(ContentFormat format) throws InterruptedException {
         // write resource
-        final byte[] expectedvalue = new byte[] { 1, 2, 3 };
+        byte[] expectedvalue = new byte[] { 1, 2, 3 };
         WriteResponse response = helper.server.send(helper.getCurrentRegistration(),
                 new WriteRequest(format, TEST_OBJECT_ID, 0, OPAQUE_RESOURCE_ID, expectedvalue));
 
@@ -267,8 +330,9 @@ public class WriteTest {
     @Test
     public void cannot_write_non_writable_resource() throws InterruptedException {
         // try to write unwritable resource like manufacturer on device
-        final String manufacturer = "new manufacturer";
-        WriteResponse response = helper.server.send(helper.getCurrentRegistration(), new WriteRequest(3, 0, 0, manufacturer));
+        String manufacturer = "new manufacturer";
+        WriteResponse response = helper.server.send(helper.getCurrentRegistration(),
+                new WriteRequest(3, 0, 0, manufacturer));
 
         // verify result
         assertEquals(ResponseCode.METHOD_NOT_ALLOWED, response.getCode());
@@ -279,7 +343,7 @@ public class WriteTest {
     @Test
     public void cannot_write_security_resource() throws InterruptedException {
         // try to write unwritable resource like manufacturer on device
-        final String uri = "new.dest.server";
+        String uri = "new.dest.server";
         WriteResponse response = helper.server.send(helper.getCurrentRegistration(), new WriteRequest(0, 0, 0, uri));
 
         // verify result
@@ -289,12 +353,31 @@ public class WriteTest {
     }
 
     @Test
-    public void can_write_object_instance() throws InterruptedException {
+    public void can_write_object_instance_in_tlv() throws InterruptedException {
+        can_write_object_instance(ContentFormat.TLV);
+    }
+
+    @Test
+    public void can_write_object_instance_in_old_tlv() throws InterruptedException {
+        can_write_object_instance(ContentFormat.fromCode(ContentFormat.OLD_TLV_CODE));
+    }
+
+    @Test
+    public void can_write_object_instance_in_json() throws InterruptedException {
+        can_write_object_instance(ContentFormat.JSON);
+    }
+
+    @Test
+    public void can_write_object_instance_in_old_json() throws InterruptedException {
+        can_write_object_instance(ContentFormat.fromCode(ContentFormat.OLD_JSON_CODE));
+    }
+
+    public void can_write_object_instance(ContentFormat format) throws InterruptedException {
         // write device timezone and offset
         LwM2mResource utcOffset = LwM2mSingleResource.newStringResource(14, "+02");
         LwM2mResource timeZone = LwM2mSingleResource.newStringResource(15, "Europe/Paris");
         WriteResponse response = helper.server.send(helper.getCurrentRegistration(),
-                new WriteRequest(Mode.REPLACE, 3, 0, utcOffset, timeZone));
+                new WriteRequest(Mode.REPLACE, format, 3, 0, utcOffset, timeZone));
 
         // verify result
         assertEquals(ResponseCode.CHANGED, response.getCode());
@@ -387,26 +470,6 @@ public class WriteTest {
     }
 
     @Test
-    public void can_write_object_instance_in_json() throws InterruptedException {
-        // write device timezone and offset
-        LwM2mResource utcOffset = LwM2mSingleResource.newStringResource(14, "+02");
-        LwM2mResource timeZone = LwM2mSingleResource.newStringResource(15, "Europe/Paris");
-        WriteResponse response = helper.server.send(helper.getCurrentRegistration(),
-                new WriteRequest(Mode.REPLACE, ContentFormat.JSON, 3, 0, utcOffset, timeZone));
-
-        // verify result
-        assertEquals(ResponseCode.CHANGED, response.getCode());
-        assertNotNull(response.getCoapResponse());
-        assertThat(response.getCoapResponse(), is(instanceOf(Response.class)));
-
-        // read the timezone to check the value changed
-        ReadResponse readResponse = helper.server.send(helper.getCurrentRegistration(), new ReadRequest(3, 0));
-        LwM2mObjectInstance instance = (LwM2mObjectInstance) readResponse.getContent();
-        assertEquals(utcOffset, instance.getResource(14));
-        assertEquals(timeZone, instance.getResource(15));
-    }
-
-    @Test
     public void can_write_multi_instance_objlnk_resource_in_tlv() throws InterruptedException {
         Map<Integer, ObjectLink> neighbourCellReport = new HashMap<>();
         neighbourCellReport.put(0, new ObjectLink(10245, 1));
@@ -474,12 +537,35 @@ public class WriteTest {
         assertThat(response.getCoapResponse(), is(instanceOf(Response.class)));
 
         // Reading back the written OBJLNK value
-        ReadResponse readResponse = helper.server.send(helper.getCurrentRegistration(), new ReadRequest(ContentFormat.TEXT,
-                IntegrationTestHelper.TEST_OBJECT_ID, 0, IntegrationTestHelper.OBJLNK_SINGLE_INSTANCE_RESOURCE_ID));
+        ReadResponse readResponse = helper.server.send(helper.getCurrentRegistration(),
+                new ReadRequest(ContentFormat.TEXT, IntegrationTestHelper.TEST_OBJECT_ID, 0,
+                        IntegrationTestHelper.OBJLNK_SINGLE_INSTANCE_RESOURCE_ID));
         LwM2mSingleResource resource = (LwM2mSingleResource) readResponse.getContent();
 
         // verify read value
         assertEquals(((ObjectLink) resource.getValue()).getObjectId(), 10245);
         assertEquals(((ObjectLink) resource.getValue()).getObjectInstanceId(), 0);
+    }
+
+    @Test(expected = CodecException.class)
+    public void send_writerequest_synchronously_with_bad_payload_raises_codeexception() throws InterruptedException {
+        helper.server.send(helper.getCurrentRegistration(),
+                new WriteRequest(3, 0, 13, "a string instead of timestamp for currenttime resource"));
+
+    }
+
+    @Test(expected = CodecException.class)
+    public void send_writerequest_asynchronously_with_bad_payload_raises_codeexception() throws InterruptedException {
+        helper.server.send(helper.getCurrentRegistration(),
+                new WriteRequest(3, 0, 13, "a string instead of timestamp for currenttime resource"),
+                new ResponseCallback<WriteResponse>() {
+                    @Override
+                    public void onResponse(WriteResponse response) {
+                    }
+                }, new ErrorCallback() {
+                    @Override
+                    public void onError(Exception e) {
+                    }
+                });
     }
 }

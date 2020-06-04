@@ -2,11 +2,11 @@
  * Copyright (c) 2016 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -35,10 +35,9 @@ public interface LwM2mNodeDecoder {
      * @param path the path of the node to build
      * @param model the collection of supported object models
      * @return the resulting node
-     * @throws InvalidValueException
+     * @throws CodecException if there payload is malformed.
      */
-    LwM2mNode decode(byte[] content, ContentFormat format, LwM2mPath path, LwM2mModel model)
-            throws InvalidValueException;
+    LwM2mNode decode(byte[] content, ContentFormat format, LwM2mPath path, LwM2mModel model) throws CodecException;
 
     /**
      * Deserializes a binary content into a {@link LwM2mNode} of the expected type.
@@ -49,10 +48,10 @@ public interface LwM2mNodeDecoder {
      * @param model the collection of supported object models
      * @param nodeClass the class of the {@link LwM2mNode} to decode
      * @return the resulting node
-     * @throws InvalidValueException
+     * @throws CodecException if there payload is malformed.
      */
     <T extends LwM2mNode> T decode(byte[] content, ContentFormat format, LwM2mPath path, LwM2mModel model,
-            Class<T> nodeClass) throws InvalidValueException;
+            Class<T> nodeClass) throws CodecException;
 
     /**
      * Deserializes a binary content into a list of time-stamped {@link LwM2mNode} ordering by time-stamp.
@@ -61,12 +60,11 @@ public interface LwM2mNodeDecoder {
      * @param format the content format
      * @param path the path of the node to build
      * @param model the collection of supported object models
-     * @param nodeClass the class of the {@link LwM2mNode} to decode
      * @return the resulting list of time-stamped {@link LwM2mNode} ordering by time-stamp
-     * @throws InvalidValueException
+     * @exception CodecException if there payload is malformed.
      */
     List<TimestampedLwM2mNode> decodeTimestampedData(byte[] content, ContentFormat format, LwM2mPath path,
-            LwM2mModel model) throws InvalidValueException;
+            LwM2mModel model) throws CodecException;
 
     /**
      * return true is the given {@link ContentFormat} is supported

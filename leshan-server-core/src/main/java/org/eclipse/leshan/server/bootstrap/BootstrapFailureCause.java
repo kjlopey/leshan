@@ -2,11 +2,11 @@
  * Copyright (c) 2016 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -24,13 +24,17 @@ public enum BootstrapFailureCause {
      */
     UNAUTHORIZED,
     /**
-     * The Boostrap Server could not find a configuration to send to the device
+     * The Bootstrap Server could not find a configuration to send to the device
      */
     NO_BOOTSTRAP_CONFIG,
     /**
-     * The "/" object could not be deleted on the device
+     * A delete request failed
      */
     DELETE_FAILED,
+    /**
+     * Object 2 (ACL) could not be written on the device
+     */
+    WRITE_ACL_FAILED,
     /**
      * Object 1 (Server) could not be written on the device
      */
@@ -40,11 +44,15 @@ public enum BootstrapFailureCause {
      */
     WRITE_SECURITY_FAILED,
     /**
-     * 'Bootstrap Finish' message count not be sent to the device
+     * 'Bootstrap Finish' failed
      */
-    SEND_FINISH_FAILED,
+    FINISH_FAILED,
     /**
-     * The device responded to 'Bootstrap Finish' with an error code
+     * The bootstrap session is cancelled, generally because device starts a new one.
      */
-    FINISHED_WITH_ERROR
+    CANCELLED,
+    /**
+     * An unexpected error occured
+     */
+    INTERNAL_SERVER_ERROR,
 }

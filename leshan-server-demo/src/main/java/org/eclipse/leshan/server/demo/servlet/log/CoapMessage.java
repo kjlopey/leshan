@@ -2,11 +2,11 @@
  * Copyright (c) 2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -15,22 +15,22 @@
  *******************************************************************************/
 package org.eclipse.leshan.server.demo.servlet.log;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import org.apache.commons.io.Charsets;
 import org.apache.commons.lang.StringUtils;
 import org.eclipse.californium.core.coap.CoAP.Type;
+import org.eclipse.leshan.core.util.Hex;
 import org.eclipse.californium.core.coap.EmptyMessage;
 import org.eclipse.californium.core.coap.Option;
 import org.eclipse.californium.core.coap.OptionNumberRegistry;
 import org.eclipse.californium.core.coap.OptionSet;
 import org.eclipse.californium.core.coap.Request;
 import org.eclipse.californium.core.coap.Response;
-import org.eclipse.leshan.util.Hex;
 
 public class CoapMessage {
 
@@ -103,7 +103,7 @@ public class CoapMessage {
             }
         }
         if (payload != null && payload.length > 0) {
-            String strPayload = new String(payload, Charsets.UTF_8);
+            String strPayload = new String(payload, StandardCharsets.UTF_8);
             if (StringUtils.isAsciiPrintable(strPayload)) {
                 this.payload = strPayload;
             } else {

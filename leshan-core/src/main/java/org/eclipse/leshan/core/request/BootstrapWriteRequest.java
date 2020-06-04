@@ -2,11 +2,11 @@
  * Copyright (c) 2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -21,8 +21,8 @@ import org.eclipse.leshan.core.node.LwM2mObject;
 import org.eclipse.leshan.core.node.LwM2mObjectInstance;
 import org.eclipse.leshan.core.node.LwM2mPath;
 import org.eclipse.leshan.core.node.LwM2mResource;
+import org.eclipse.leshan.core.request.exception.InvalidRequestException;
 import org.eclipse.leshan.core.response.BootstrapWriteResponse;
-import org.eclipse.leshan.util.Validate;
 
 /**
  * A LWM2M request for writing object instances during the bootstrap phase.
@@ -32,45 +32,53 @@ public class BootstrapWriteRequest extends AbstractDownlinkRequest<BootstrapWrit
     private final LwM2mNode node;
     private final ContentFormat contentFormat;
 
-    public BootstrapWriteRequest(final LwM2mPath target, final LwM2mNode node, ContentFormat format) {
+    public BootstrapWriteRequest(LwM2mPath target, LwM2mNode node, ContentFormat format)
+            throws InvalidRequestException {
         super(target);
-        Validate.notNull(node);
+        if (target.isRoot())
+            throw new InvalidRequestException("BootstrapWrite request cannot target root path");
+
+        if (node == null)
+            throw new InvalidRequestException("new node value is mandatory for %s", target);
 
         // Validate node and path coherence
         if (getPath().isResource()) {
             if (!(node instanceof LwM2mResource)) {
-                throw new IllegalArgumentException(String.format("path '%s' and node type '%s' does not match",
-                        target.toString(), node.getClass().getSimpleName()));
+                throw new InvalidRequestException("path '%s' and node type '%s' do not match", target,
+                        node.getClass().getSimpleName());
             }
         } else if (getPath().isObjectInstance()) {
             if (!(node instanceof LwM2mObjectInstance)) {
-                throw new IllegalArgumentException(String.format("path '%s' and node type '%s' does not match",
-                        target.toString(), node.getClass().getSimpleName()));
+                throw new InvalidRequestException("path '%s' and node type '%s' do not match", target,
+                        node.getClass().getSimpleName());
             }
         } else if (getPath().isObject()) {
             if (!(node instanceof LwM2mObject)) {
-                throw new IllegalArgumentException(String.format("path '%s' and node type '%s' does not match",
-                        target.toString(), node.getClass().getSimpleName()));
+                throw new InvalidRequestException("path '%s' and node type '%s' do not match", target,
+                        node.getClass().getSimpleName());
             }
         }
 
         // Validate content format
         if (ContentFormat.TEXT == format || ContentFormat.OPAQUE == format) {
             if (!getPath().isResource()) {
-                throw new IllegalArgumentException(
-                        String.format("%s format must be used only for single resources", format.toString()));
+                throw new InvalidRequestException(
+                        "Invalid format for path %s: %s format must be used only for single resources", target, format);
             } else {
                 LwM2mResource resource = (LwM2mResource) node;
                 if (resource.isMultiInstances()) {
-                    throw new IllegalArgumentException(
-                            String.format("%s format must be used only for single resources", format.toString()));
+                    throw new InvalidRequestException(
+                            "Invalid format for path %s: %s format must be used only for single resources", target,
+                            format);
                 } else {
                     if (resource.getType() == Type.OPAQUE && format == ContentFormat.TEXT) {
-                        throw new IllegalArgumentException(
-                                "TEXT format must not be used for byte array single resources");
+                        throw new InvalidRequestException(
+                                "Invalid format for path %s: TEXT format must not be used for byte array single resources",
+                                target);
                     } else if (resource.getType() != Type.OPAQUE && format == ContentFormat.OPAQUE) {
-                        throw new IllegalArgumentException(
-                                "OPAQUE format must be used only for byte array single resources");
+                        throw new InvalidRequestException(
+                                "Invalid format for path %s: OPAQUE format must be used only for byte array single resources",
+                                target);
                     }
                 }
             }
@@ -93,13 +101,14 @@ public class BootstrapWriteRequest extends AbstractDownlinkRequest<BootstrapWrit
     }
 
     @Override
-    public void accept(final DownlinkRequestVisitor visitor) {
+    public void accept(DownlinkRequestVisitor visitor) {
         visitor.visit(this);
     }
 
     @Override
     public String toString() {
-        return String.format("BootstrapWriteRequest [node=%s, contentFormat=%s]", node, contentFormat);
+        return String.format("BootstrapWriteRequest [path=%s, node=%s, contentFormat=%s]", getPath(), node,
+                contentFormat);
     }
 
 }

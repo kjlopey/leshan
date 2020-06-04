@@ -2,11 +2,11 @@
  * Copyright (c) 2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -21,7 +21,6 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 
 import org.eclipse.leshan.core.model.ResourceModel.Type;
-import org.eclipse.leshan.util.Validate;
 
 /**
  * A resource with a single value.
@@ -35,7 +34,9 @@ public class LwM2mSingleResource implements LwM2mResource {
     private final Type type;
 
     protected LwM2mSingleResource(int id, Object value, Type type) {
-        Validate.notNull(value);
+        LwM2mNodeUtil.validateNotNull(value, "value MUST NOT be null");
+        LwM2mNodeUtil.validateResourceId(id);
+
         this.id = id;
         this.value = value;
         this.type = type;
@@ -46,34 +47,34 @@ public class LwM2mSingleResource implements LwM2mResource {
         switch (type) {
         case INTEGER:
             if (!(value instanceof Long))
-                throw new IllegalArgumentException(doesNotMatchMessage);
+                throw new LwM2mNodeException(doesNotMatchMessage);
             break;
         case FLOAT:
             if (!(value instanceof Double))
-                throw new IllegalArgumentException(doesNotMatchMessage);
+                throw new LwM2mNodeException(doesNotMatchMessage);
             break;
         case BOOLEAN:
             if (!(value instanceof Boolean))
-                throw new IllegalArgumentException(doesNotMatchMessage);
+                throw new LwM2mNodeException(doesNotMatchMessage);
             break;
         case OPAQUE:
             if (!(value instanceof byte[]))
-                throw new IllegalArgumentException(doesNotMatchMessage);
+                throw new LwM2mNodeException(doesNotMatchMessage);
             break;
         case STRING:
             if (!(value instanceof String))
-                throw new IllegalArgumentException(doesNotMatchMessage);
+                throw new LwM2mNodeException(doesNotMatchMessage);
             break;
         case TIME:
             if (!(value instanceof Date))
-                throw new IllegalArgumentException(doesNotMatchMessage);
+                throw new LwM2mNodeException(doesNotMatchMessage);
             break;
         case OBJLNK:
             if (!(value instanceof ObjectLink))
-                throw new IllegalArgumentException(doesNotMatchMessage);
+                throw new LwM2mNodeException(doesNotMatchMessage);
             break;
         default:
-            throw new IllegalArgumentException(String.format("Type %s is not supported", type.name()));
+            throw new LwM2mNodeException(String.format("Type %s is not supported", type.name()));
         }
         return new LwM2mSingleResource(id, value, type);
     }
@@ -131,7 +132,7 @@ public class LwM2mSingleResource implements LwM2mResource {
     }
 
     /**
-     * @exception raise a {@link NoSuchElementException}
+     * @exception NoSuchElementException use {@link #getValue()} instead.
      */
     @Override
     public Map<Integer, ?> getValues() {
@@ -139,7 +140,7 @@ public class LwM2mSingleResource implements LwM2mResource {
     }
 
     /**
-     * @exception raise a {@link NoSuchElementException}
+     * @exception NoSuchElementException use {@link #getValue()} instead.
      */
     @Override
     public Object getValue(int id) {
@@ -192,15 +193,18 @@ public class LwM2mSingleResource implements LwM2mResource {
                 return false;
         } else {
             // Custom equals to handle byte arrays
-            return type == Type.OPAQUE ? Arrays.equals((byte[]) value, (byte[]) other.value) : value
-                    .equals(other.value);
+            return type == Type.OPAQUE ? Arrays.equals((byte[]) value, (byte[]) other.value)
+                    : value.equals(other.value);
         }
         return true;
     }
 
     @Override
     public String toString() {
-        return String.format("LwM2mSingleResource [id=%s, value=%s, type=%s]", id, value, type);
+        // We don't print OPAQUE value as this could be credentials one.
+        // Not ideal but didn't find better way for now.
+        return String.format("LwM2mSingleResource [id=%s, value=%s, type=%s]", id,
+                type == Type.OPAQUE ? ((byte[]) value).length + "Bytes" : value, type);
     }
 
 }

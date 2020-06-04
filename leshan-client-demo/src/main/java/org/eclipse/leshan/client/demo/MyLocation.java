@@ -1,9 +1,13 @@
 package org.eclipse.leshan.client.demo;
 
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 import java.util.Random;
 
 import org.eclipse.leshan.client.resource.BaseInstanceEnabler;
+import org.eclipse.leshan.client.servers.ServerIdentity;
+import org.eclipse.leshan.core.model.ObjectModel;
 import org.eclipse.leshan.core.response.ReadResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,7 +16,9 @@ public class MyLocation extends BaseInstanceEnabler {
 
     private static final Logger LOG = LoggerFactory.getLogger(MyLocation.class);
 
-    private Random random = new Random();
+    private static final List<Integer> supportedResources = Arrays.asList(0, 1, 5);
+    private static final Random RANDOM = new Random();
+
     private float latitude;
     private float longitude;
     private float scaleFactor;
@@ -26,20 +32,20 @@ public class MyLocation extends BaseInstanceEnabler {
         if (latitude != null) {
             this.latitude = latitude + 90f;
         } else {
-            this.latitude = Float.valueOf(random.nextInt(180));
+            this.latitude = RANDOM.nextInt(180);
         }
         if (longitude != null) {
             this.longitude = longitude + 180f;
         } else {
-            this.longitude = Float.valueOf(random.nextInt(360));
+            this.longitude = RANDOM.nextInt(360);
         }
         this.scaleFactor = scaleFactor;
         timestamp = new Date();
-   }
+    }
 
     @Override
-    public ReadResponse read(int resourceid) {
-        LOG.info("Read on Location Resource " + resourceid);
+    public ReadResponse read(ServerIdentity identity, int resourceid) {
+        LOG.info("Read on Location resource /{}/{}/{}", getModel().id, getId(), resourceid);
         switch (resourceid) {
         case 0:
             return ReadResponse.success(resourceid, getLatitude());
@@ -48,7 +54,7 @@ public class MyLocation extends BaseInstanceEnabler {
         case 5:
             return ReadResponse.success(resourceid, getTimestamp());
         default:
-            return super.read(resourceid);
+            return super.read(identity, resourceid);
         }
     }
 
@@ -56,15 +62,19 @@ public class MyLocation extends BaseInstanceEnabler {
         switch (nextMove.charAt(0)) {
         case 'w':
             moveLatitude(1.0f);
+            LOG.info("Move to North {}/{}", getLatitude(), getLongitude());
             break;
         case 'a':
             moveLongitude(-1.0f);
+            LOG.info("Move to East {}/{}", getLatitude(), getLongitude());
             break;
         case 's':
             moveLatitude(-1.0f);
+            LOG.info("Move to South {}/{}", getLatitude(), getLongitude());
             break;
         case 'd':
             moveLongitude(1.0f);
+            LOG.info("Move to West {}/{}", getLatitude(), getLongitude());
             break;
         }
     }
@@ -81,15 +91,20 @@ public class MyLocation extends BaseInstanceEnabler {
         fireResourcesChange(1, 5);
     }
 
-    public String getLatitude() {
-        return Float.toString(latitude - 90.0f);
+    public float getLatitude() {
+        return latitude - 90.0f;
     }
 
-    public String getLongitude() {
-        return Float.toString(longitude - 180.f);
+    public float getLongitude() {
+        return longitude - 180.f;
     }
 
     public Date getTimestamp() {
         return timestamp;
+    }
+
+    @Override
+    public List<Integer> getAvailableResourceIds(ObjectModel model) {
+        return supportedResources;
     }
 }

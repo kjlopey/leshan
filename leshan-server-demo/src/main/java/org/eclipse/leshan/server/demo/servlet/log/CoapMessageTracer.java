@@ -2,11 +2,11 @@
  * Copyright (c) 2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -15,7 +15,7 @@
  *******************************************************************************/
 package org.eclipse.leshan.server.demo.servlet.log;
 
-import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -23,41 +23,40 @@ import org.eclipse.californium.core.coap.EmptyMessage;
 import org.eclipse.californium.core.coap.Request;
 import org.eclipse.californium.core.coap.Response;
 import org.eclipse.californium.core.network.interceptors.MessageInterceptor;
-import org.eclipse.leshan.server.client.Client;
-import org.eclipse.leshan.server.client.ClientRegistry;
+import org.eclipse.leshan.server.registration.Registration;
+import org.eclipse.leshan.server.registration.RegistrationService;
 
 public class CoapMessageTracer implements MessageInterceptor {
 
     private final Map<String, CoapMessageListener> listeners = new ConcurrentHashMap<>();
 
-    private final ClientRegistry registry;
+    private final RegistrationService registry;
 
     public void addListener(String endpoint, CoapMessageListener listener) {
-        Client client = registry.get(endpoint);
-        if (client != null) {
-            listeners.put(toStringAddress(client.getAddress(), client.getPort()), listener);
+        Registration registration = registry.getByEndpoint(endpoint);
+        if (registration != null) {
+            listeners.put(toStringAddress(registration.getIdentity().getPeerAddress()), listener);
         }
     }
 
     public void removeListener(String endpoint) {
-        Client client = registry.get(endpoint);
-        if (client != null) {
-            listeners.remove(toStringAddress(client.getAddress(), client.getPort()));
+        Registration registration = registry.getByEndpoint(endpoint);
+        if (registration != null) {
+            listeners.remove(toStringAddress(registration.getIdentity().getPeerAddress()));
         }
     }
 
-    private String toStringAddress(InetAddress clientAddress, int clientPort) {
-        return clientAddress.toString() + ":" + clientPort;
+    private String toStringAddress(InetSocketAddress clientAddress) {
+        return clientAddress.getAddress() + ":" + clientAddress.getPort();
     }
 
-    public CoapMessageTracer(ClientRegistry registry) {
+    public CoapMessageTracer(RegistrationService registry) {
         this.registry = registry;
     }
 
     @Override
     public void sendRequest(Request request) {
-        CoapMessageListener listener = listeners.get(toStringAddress(request.getDestination(),
-                request.getDestinationPort()));
+        CoapMessageListener listener = listeners.get(toStringAddress(request.getDestinationContext().getPeerAddress()));
         if (listener != null) {
             listener.trace(new CoapMessage(request, false));
         }
@@ -65,8 +64,8 @@ public class CoapMessageTracer implements MessageInterceptor {
 
     @Override
     public void sendResponse(Response response) {
-        CoapMessageListener listener = listeners.get(toStringAddress(response.getDestination(),
-                response.getDestinationPort()));
+        CoapMessageListener listener = listeners
+                .get(toStringAddress(response.getDestinationContext().getPeerAddress()));
         if (listener != null) {
             listener.trace(new CoapMessage(response, false));
         }
@@ -74,8 +73,7 @@ public class CoapMessageTracer implements MessageInterceptor {
 
     @Override
     public void sendEmptyMessage(EmptyMessage message) {
-        CoapMessageListener listener = listeners.get(toStringAddress(message.getDestination(),
-                message.getDestinationPort()));
+        CoapMessageListener listener = listeners.get(toStringAddress(message.getDestinationContext().getPeerAddress()));
         if (listener != null) {
             listener.trace(new CoapMessage(message, false));
         }
@@ -83,7 +81,7 @@ public class CoapMessageTracer implements MessageInterceptor {
 
     @Override
     public void receiveRequest(Request request) {
-        CoapMessageListener listener = listeners.get(toStringAddress(request.getSource(), request.getSourcePort()));
+        CoapMessageListener listener = listeners.get(toStringAddress(request.getSourceContext().getPeerAddress()));
         if (listener != null) {
             listener.trace(new CoapMessage(request, true));
         }
@@ -92,7 +90,7 @@ public class CoapMessageTracer implements MessageInterceptor {
 
     @Override
     public void receiveResponse(Response response) {
-        CoapMessageListener listener = listeners.get(toStringAddress(response.getSource(), response.getSourcePort()));
+        CoapMessageListener listener = listeners.get(toStringAddress(response.getSourceContext().getPeerAddress()));
         if (listener != null) {
             listener.trace(new CoapMessage(response, true));
         }
@@ -101,7 +99,7 @@ public class CoapMessageTracer implements MessageInterceptor {
 
     @Override
     public void receiveEmptyMessage(EmptyMessage message) {
-        CoapMessageListener listener = listeners.get(toStringAddress(message.getSource(), message.getSourcePort()));
+        CoapMessageListener listener = listeners.get(toStringAddress(message.getSourceContext().getPeerAddress()));
         if (listener != null) {
             listener.trace(new CoapMessage(message, true));
         }

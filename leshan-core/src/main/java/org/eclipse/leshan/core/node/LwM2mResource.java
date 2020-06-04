@@ -2,11 +2,11 @@
  * Copyright (c) 2013-2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -43,12 +43,12 @@ public interface LwM2mResource extends LwM2mNode {
      * 
      * The type of the returned value depends on the {@link #getType()} method.
      * 
-     * If {@link #getType()} returns {@link Type#BOOLEAN}, the value is a {@link Boolean}.<br/>
-     * If {@link #getType()} returns {@link Type#STRING}, the value is a {@link String}.<br/>
-     * If {@link #getType()} returns {@link Type#OPAQUE}, the value is a byte array.<br/>
-     * If {@link #getType()} returns {@link Type#TIME}, the value is a {@link Date}.<br/>
-     * If {@link #getType()} returns {@link Type#INTEGER}, the value is a {@link Long}.<br/>
-     * If {@link #getType()} returns {@link Type#FLOAT}, the value is a {@link Double}.<br/>
+     * If {@link #getType()} returns {@link Type#BOOLEAN}, the value is a {@link Boolean}.<br>
+     * If {@link #getType()} returns {@link Type#STRING}, the value is a {@link String}.<br>
+     * If {@link #getType()} returns {@link Type#OPAQUE}, the value is a byte array.<br>
+     * If {@link #getType()} returns {@link Type#TIME}, the value is a {@link Date}.<br>
+     * If {@link #getType()} returns {@link Type#INTEGER}, the value is a {@link Long}.<br>
+     * If {@link #getType()} returns {@link Type#FLOAT}, the value is a {@link Double}.<br>
      * 
      * @return the value of the resource.
      */
@@ -59,12 +59,12 @@ public interface LwM2mResource extends LwM2mNode {
      * 
      * The type of the right part of the returned map depends on the {@link #getType()} method.
      * 
-     * If {@link #getType()} returns {@link Type#BOOLEAN}, the value is a {@link Boolean}.<br/>
-     * If {@link #getType()} returns {@link Type#STRING}, the value is a {@link String}.<br/>
-     * If {@link #getType()} returns {@link Type#OPAQUE}, the value is a byte array.<br/>
-     * If {@link #getType()} returns {@link Type#TIME}, the value is a {@link Date}.<br/>
-     * If {@link #getType()} returns {@link Type#INTEGER}, the value is a {@link Long}.<br/>
-     * If {@link #getType()} returns {@link Type#FLOAT}, the value is a {@link Double}.<br/>
+     * If {@link #getType()} returns {@link Type#BOOLEAN}, the value is a {@link Boolean}.<br>
+     * If {@link #getType()} returns {@link Type#STRING}, the value is a {@link String}.<br>
+     * If {@link #getType()} returns {@link Type#OPAQUE}, the value is a byte array.<br>
+     * If {@link #getType()} returns {@link Type#TIME}, the value is a {@link Date}.<br>
+     * If {@link #getType()} returns {@link Type#INTEGER}, the value is a {@link Long}.<br>
+     * If {@link #getType()} returns {@link Type#FLOAT}, the value is a {@link Double}.<br>
      * 
      * @return the values of each resource instances (key is the resource instance identifier).
      */
@@ -75,12 +75,12 @@ public interface LwM2mResource extends LwM2mNode {
      * 
      * The type of the returned value depends on the {@link #getType()} method.
      * 
-     * If {@link #getType()} returns {@link Type#BOOLEAN}, the value is a {@link Boolean}.<br/>
-     * If {@link #getType()} returns {@link Type#STRING}, the value is a {@link String}.<br/>
-     * If {@link #getType()} returns {@link Type#OPAQUE}, the value is a byte array.<br/>
-     * If {@link #getType()} returns {@link Type#TIME}, the value is a {@link Date}.<br/>
-     * If {@link #getType()} returns {@link Type#INTEGER}, the value is a {@link Long}.<br/>
-     * If {@link #getType()} returns {@link Type#FLOAT}, the value is a {@link Double}.<br/>
+     * If {@link #getType()} returns {@link Type#BOOLEAN}, the value is a {@link Boolean}.<br>
+     * If {@link #getType()} returns {@link Type#STRING}, the value is a {@link String}.<br>
+     * If {@link #getType()} returns {@link Type#OPAQUE}, the value is a byte array.<br>
+     * If {@link #getType()} returns {@link Type#TIME}, the value is a {@link Date}.<br>
+     * If {@link #getType()} returns {@link Type#INTEGER}, the value is a {@link Long}.<br>
+     * If {@link #getType()} returns {@link Type#FLOAT}, the value is a {@link Double}.<br>
      * 
      * @return the value a resource instance with the given identifier.
      */

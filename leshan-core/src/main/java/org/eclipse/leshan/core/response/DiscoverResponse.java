@@ -2,11 +2,11 @@
  * Copyright (c) 2013-2015 Sierra Wireless and others.
  * 
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * and Eclipse Distribution License v1.0 which accompany this distribution.
  * 
  * The Eclipse Public License is available at
- *    http://www.eclipse.org/legal/epl-v10.html
+ *    http://www.eclipse.org/legal/epl-v20.html
  * and the Eclipse Distribution License is available at
  *    http://www.eclipse.org/org/documents/edl-v10.html.
  * 
@@ -17,22 +17,23 @@ package org.eclipse.leshan.core.response;
 
 import java.util.Arrays;
 
-import org.eclipse.leshan.LinkObject;
-import org.eclipse.leshan.ResponseCode;
-import org.eclipse.leshan.util.Validate;
+import org.eclipse.leshan.core.Link;
+import org.eclipse.leshan.core.ResponseCode;
+import org.eclipse.leshan.core.request.exception.InvalidResponseException;
 
 public class DiscoverResponse extends AbstractLwM2mResponse {
 
-    private final LinkObject[] links;
+    private final Link[] links;
 
-    public DiscoverResponse(ResponseCode code, LinkObject[] links, String errorMessage) {
+    public DiscoverResponse(ResponseCode code, Link[] links, String errorMessage) {
         this(code, links, errorMessage, null);
     }
 
-    public DiscoverResponse(ResponseCode code, LinkObject[] links, String errorMessage, Object coapResponse) {
+    public DiscoverResponse(ResponseCode code, Link[] links, String errorMessage, Object coapResponse) {
         super(code, errorMessage, coapResponse);
         if (ResponseCode.CONTENT.equals(code)) {
-            Validate.notNull(links);
+            if (links == null)
+                throw new InvalidResponseException("links is mandatory for successful response");
             this.links = Arrays.copyOf(links, links.length);
         } else {
             this.links = null;
@@ -40,17 +41,32 @@ public class DiscoverResponse extends AbstractLwM2mResponse {
     }
 
     /**
-     * Get the list of {@link LinkObject} returned as response payload.
+     * Get the list of {@link Link} returned as response payload.
      *
      * @return the object links or <code>null</code> if the client returned an error response.
      */
-    public LinkObject[] getObjectLinks() {
+    public Link[] getObjectLinks() {
         return links != null ? links.clone() : null;
     }
 
     @Override
     public boolean isSuccess() {
         return getCode() == ResponseCode.CONTENT;
+    }
+
+    @Override
+    public boolean isValid() {
+        switch (code.getCode()) {
+        case ResponseCode.CONTENT_CODE:
+        case ResponseCode.BAD_REQUEST_CODE:
+        case ResponseCode.UNAUTHORIZED_CODE:
+        case ResponseCode.NOT_FOUND_CODE:
+        case ResponseCode.METHOD_NOT_ALLOWED_CODE:
+        case ResponseCode.INTERNAL_SERVER_ERROR_CODE:
+            return true;
+        default:
+            return false;
+        }
     }
 
     @Override
@@ -63,7 +79,7 @@ public class DiscoverResponse extends AbstractLwM2mResponse {
 
     // Syntactic sugar static constructors :
 
-    public static DiscoverResponse success(LinkObject[] links) {
+    public static DiscoverResponse success(Link[] links) {
         return new DiscoverResponse(ResponseCode.CONTENT, links, null);
     }
 
